@@ -3,7 +3,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)]()
 
-**Undetected web scraping SDK** powered by [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
+**Undetected web scraping SDK** inspired on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
 
 ## Features
 
