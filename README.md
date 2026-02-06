@@ -295,7 +295,7 @@ Without explicit region, locale/timezone are auto-detected from your public IP.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ABRASIO_API_KEY` | API key for cloud mode | `None` |
-| `ABRASIO_API_URL` | API base URL | `http://localhost:8000` |
+| `ABRASIO_API_URL` | API base URL | `https://abrasio.scrapetechnology.com/` |
 
 ## Cloud Mode (Paid)
 
