@@ -68,44 +68,49 @@ class CloudBrowser:
         self._api_client = AbrasioAPIClient(self.config)
         await self._api_client.start()
 
-        # Create session
-        logger.info("Creating cloud browser session...")
-        session_data = await self._api_client.create_session(
-            url=self.config.url,  # Default URL for session creation
-            region=self.config.region,
-            profile_id=self.config.profile_id,
-        )
+        try:
+            # Create session
+            logger.info("Creating cloud browser session...")
+            session_data = await self._api_client.create_session(
+                url=self.config.url,  # Default URL for session creation
+                region=self.config.region,
+                profile_id=self.config.profile_id,
+            )
 
-        self._session_id = session_data.get("id")
-        if not self._session_id:
-            raise SessionError("No session ID returned from API")
+            self._session_id = session_data.get("id")
+            if not self._session_id:
+                raise SessionError("No session ID returned from API")
 
-        logger.info(f"Session created: {self._session_id}")
+            logger.info(f"Session created: {self._session_id}")
 
-        # Wait for session to be ready
-        session = await self._api_client.wait_for_ready(
-            self._session_id,
-            timeout_seconds=60,
-        )
+            # Wait for session to be ready
+            session = await self._api_client.wait_for_ready(
+                self._session_id,
+                timeout_seconds=60,
+            )
 
-        self._ws_endpoint = session.get("ws_endpoint")
-        if not self._ws_endpoint:
-            raise SessionError("No WebSocket endpoint returned", self._session_id)
+            self._ws_endpoint = session.get("ws_endpoint")
+            if not self._ws_endpoint:
+                raise SessionError("No WebSocket endpoint returned", self._session_id)
 
-        # Show live view URL if available
-        live_view_url = session.get("live_view_url")
-        if live_view_url:
-            self._live_view_url = live_view_url
-            print(f"\n[Abrasio] Live View: {live_view_url}\n")
-            logger.info(f"Live view available: {live_view_url}")
+            # Show live view URL if available
+            live_view_url = session.get("live_view_url")
+            if live_view_url:
+                self._live_view_url = live_view_url
+                print(f"\n[Abrasio] Live View: {live_view_url}\n")
+                logger.info(f"Live view available: {live_view_url}")
 
-        logger.info(f"Connecting to WebSocket: {self._ws_endpoint}")
+            logger.info(f"Connecting to WebSocket: {self._ws_endpoint}")
 
-        # Connect via Patchright CDP (maintains stealth properties)
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.connect_over_cdp(self._ws_endpoint)
+            # Connect via Patchright CDP (maintains stealth properties)
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.connect_over_cdp(self._ws_endpoint)
 
-        logger.info("Connected to cloud browser")
+            logger.info("Connected to cloud browser")
+        except Exception:
+            # Cleanup on failure to prevent resource leaks
+            await self.close()
+            raise
 
     async def close(self) -> None:
         """Close browser and cleanup session."""

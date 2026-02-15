@@ -53,7 +53,7 @@ class AbrasioConfig:
 
     Attributes:
         api_key: Abrasio API key for cloud mode. If None, uses local mode.
-        api_url: Abrasio API URL (default: https://api.abrasio.io)
+        api_url: Abrasio API URL (default: https://abrasio-api.scrapetechnology.com)
         headless: Run browser in headless mode (default: True)
         proxy: Proxy URL for local mode (e.g., "http://user:pass@host:port")
         timeout: Default timeout in milliseconds (default: 30000)
@@ -71,7 +71,7 @@ class AbrasioConfig:
 
     # Core settings
     api_key: Optional[str] = field(default_factory=lambda: os.getenv("ABRASIO_API_KEY"))
-    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "https://abrasio.scrapetechnology.com"))
+    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "https://abrasio-api.scrapetechnology.com"))
     url: Optional[str] = None
 
     # Browser settings

@@ -21,7 +21,7 @@ async def main():
     # Local mode - no API key needed
     # headless=False recommended for maximum stealth
 
-    async with Abrasio(headless=True) as browser:
+    async with Abrasio(headless=False) as browser:
         page = await browser.new_page()
 
         # Test against bot detection sites

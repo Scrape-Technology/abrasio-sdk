@@ -24,10 +24,12 @@ async def main():
         return
 
     # Cloud mode - with API key and region
+    # For local testing use: api_url="http://localhost:8000"
     async with Abrasio(
         api_key=api_key,
+        # api_url="http://localhost:8000",  # Uncomment for local testing
         region="BR",
-        url="https://example.com.br",
+        url="https://google.com.br",
     ) as browser:
         page = await browser.new_page()
 
@@ -36,7 +38,7 @@ async def main():
             print(f"Watch live: {browser.live_view_url}")
 
         # Navigate to a page
-        await page.goto("https://example.com.br")
+        await page.goto("https://browserscan.net")
 
         # Get page title
         title = await page.title()
@@ -50,7 +52,7 @@ async def main():
         await simulate_reading(page, min_seconds=2, max_seconds=5)
 
         # Take a screenshot
-        await page.screenshot(path="cloud_screenshot.png")
+        await page.screenshot(path="cloud_screenshot.png", full_page=True)
         print("Screenshot saved to cloud_screenshot.png")
 
 

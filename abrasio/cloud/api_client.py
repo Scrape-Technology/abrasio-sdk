@@ -3,6 +3,7 @@
 from typing import Optional, Dict, Any
 import logging
 import asyncio
+import uuid
 
 import httpx
 
@@ -49,12 +50,14 @@ class AbrasioAPIClient:
 
     async def start(self) -> None:
         """Initialize HTTP client."""
+        if not self.config.api_key:
+            raise AbrasioError("API key is required. Set ABRASIO_API_KEY or pass api_key to config.")
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={
                 "X-API-KEY": self.config.api_key,
                 "Content-Type": "application/json",
-                "User-Agent": f"abrasio-sdk-python/0.1.0",
+                "User-Agent": "abrasio-sdk-python/0.1.0",
             },
             timeout=httpx.Timeout(30.0),
         )
@@ -86,6 +89,11 @@ class AbrasioAPIClient:
         client = self._ensure_client()
         last_exception = None
 
+        # Add request tracing header
+        headers = kwargs.pop("headers", {})
+        headers["X-Request-ID"] = str(uuid.uuid4())
+        kwargs["headers"] = headers
+
         for attempt in range(MAX_RETRIES + 1):
             try:
                 response = await getattr(client, method)(path, **kwargs)
@@ -101,7 +109,7 @@ class AbrasioAPIClient:
                 if retry_after:
                     wait = min(float(retry_after), 30.0)
                 else:
-                    wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                    wait = min(RETRY_BACKOFF_BASE * (2 ** attempt), 15.0)
 
                 logger.warning(
                     f"Request to {path} returned {response.status_code}, "
@@ -114,7 +122,7 @@ class AbrasioAPIClient:
                 if attempt == MAX_RETRIES:
                     raise last_exception
 
-                wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                wait = min(RETRY_BACKOFF_BASE * (2 ** attempt), 15.0)
                 logger.warning(
                     f"Request to {path} timed out, "
                     f"retrying in {wait:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})"
@@ -230,6 +238,23 @@ class AbrasioAPIClient:
 
         Returns:
             Final session data
+        """
+        return await self._request_with_retry("post", f"/v1/browser/session/{session_id}/finish")
+
+    async def cancel_session(self, session_id: str) -> Dict[str, Any]:
+        """
+        Cancel a session. Works for sessions in any active state (PENDING, READY, RUNNING).
+
+        This signals the worker to stop the session and triggers final billing.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Final session data
+
+        Raises:
+            SessionError: Session not found or already finished
         """
         return await self._request_with_retry("post", f"/v1/browser/session/{session_id}/finish")
 
