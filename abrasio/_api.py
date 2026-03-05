@@ -1,6 +1,6 @@
 """Main Abrasio class - unified interface for local and cloud browsers."""
 
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, Union, Dict, TYPE_CHECKING
 import logging
 
 from ._config import AbrasioConfig
@@ -42,7 +42,7 @@ class Abrasio:
         *,
         api_key: Optional[str] = None,
         headless: bool = True,
-        proxy: Optional[str] = None,
+        proxy: Optional[Union[str, Dict[str, str]]] = None,
         stealth: bool = True,
         **kwargs,
     ):
@@ -132,8 +132,10 @@ class Abrasio:
     async def close(self) -> None:
         """Close the browser and cleanup resources."""
         if self._browser:
-            await self._browser.close()
-            self._browser = None
+            try:
+                await self._browser.close()
+            finally:
+                self._browser = None
         logger.info("Browser closed")
 
     async def new_page(self) -> "Page":

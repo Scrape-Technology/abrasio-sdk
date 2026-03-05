@@ -1,7 +1,7 @@
 """Configuration for Abrasio SDK."""
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 import os
 import logging
 
@@ -71,12 +71,12 @@ class AbrasioConfig:
 
     # Core settings
     api_key: Optional[str] = field(default_factory=lambda: os.getenv("ABRASIO_API_KEY"))
-    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "https://abrasio-api.scrapetechnology.com"))
+    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "http://localhost:8000"))
     url: Optional[str] = None
 
     # Browser settings
     headless: bool = True
-    proxy: Optional[str] = None
+    proxy: Optional[Union[str, Dict[str, str]]] = None  # "http://host:port" or {"server":..., "username":..., "password":...}
     timeout: int = 30000
 
     # Stealth settings (local mode)
@@ -90,6 +90,8 @@ class AbrasioConfig:
     # Cloud settings (paid mode)
     region: Optional[str] = None
     profile_id: Optional[str] = None
+    device: str = "desktop"          # "desktop" | "mobile"
+    mobile_model: Optional[str] = None  # e.g. "pixel-8", "iphone-15" (used when device="mobile")
 
     # Region auto-configuration
     auto_configure_region: bool = True  # Auto-configure locale/timezone from region

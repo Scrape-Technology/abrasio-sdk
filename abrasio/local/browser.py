@@ -128,7 +128,7 @@ class StealthBrowser:
         # Proxy configuration
         proxy = None
         if self.config.proxy:
-            proxy = {"server": self.config.proxy}
+            proxy = self.config.proxy
 
         # Launch with persistent context for maximum stealth
         # Key: use channel="chrome" for real Chrome, not Chromium
@@ -164,13 +164,23 @@ class StealthBrowser:
 
     async def close(self) -> None:
         """Close browser and cleanup."""
+        # Use try/finally on each step so a failure in context.close() doesn't
+        # prevent playwright.stop() from running (which would orphan the Chrome process).
         if self._context:
-            await self._context.close()
-            self._context = None
+            try:
+                await self._context.close()
+            except Exception as e:
+                logger.warning(f"Failed to close browser context: {e}")
+            finally:
+                self._context = None
 
         if self._playwright:
-            await self._playwright.stop()
-            self._playwright = None
+            try:
+                await self._playwright.stop()
+            except Exception as e:
+                logger.warning(f"Failed to stop playwright: {e}")
+            finally:
+                self._playwright = None
 
         # Optionally cleanup temp user data dir
         if self._user_data_dir and self._user_data_dir.startswith(tempfile.gettempdir()):

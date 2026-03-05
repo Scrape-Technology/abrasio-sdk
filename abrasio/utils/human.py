@@ -232,7 +232,7 @@ async def human_click(
             if double_click:
                 await element.dblclick()
             else:
-                await element.click()
+                await element.click(delay=3000, steps=7)
             return
 
         # Random position within element (not just center)
@@ -256,7 +256,7 @@ async def human_click(
     if double_click:
         await page.mouse.dblclick(x, y)
     else:
-        await page.mouse.click(x, y)
+        await page.mouse.click(x, y, delay=3000)
 
 
 # Typing speed varies by character (common letters are typed faster)

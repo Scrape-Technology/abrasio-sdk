@@ -136,6 +136,9 @@ class AbrasioAPIClient:
         url: str = None,
         region: Optional[str] = None,
         profile_id: Optional[str] = None,
+        device: str = "desktop",
+        mobile_model: Optional[str] = None,
+        proxy: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Create a new browser session.
@@ -144,6 +147,11 @@ class AbrasioAPIClient:
             url: Target URL for region inference
             region: Target region (e.g., "BR", "US")
             profile_id: Persistent profile ID to use
+            device: "desktop" or "mobile"
+            mobile_model: Mobile preset name (e.g. "pixel-8", "iphone-15")
+            proxy: Proxy override — string "http://host:port" or dict
+                   {"server": "...", "username": "...", "password": "..."}.
+                   Overrides the proxy stored in the selected profile's meta.json.
 
         Returns:
             Session data including session_id
@@ -162,6 +170,12 @@ class AbrasioAPIClient:
             payload["region"] = region
         if profile_id:
             payload["profile_id"] = profile_id
+        if device and device != "desktop":
+            payload["device"] = device
+        if mobile_model:
+            payload["mobile_model"] = mobile_model
+        if proxy:
+            payload["proxy"] = proxy if isinstance(proxy, dict) else {"server": proxy}
 
         return await self._request_with_retry("post", "/v1/browser/session/", json=payload)
 

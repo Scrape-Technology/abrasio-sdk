@@ -1,6 +1,7 @@
 """Cloud browser implementation using Abrasio API with Patchright."""
 
 from typing import Optional, TYPE_CHECKING
+import asyncio
 import logging
 
 from patchright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -75,6 +76,9 @@ class CloudBrowser:
                 url=self.config.url,  # Default URL for session creation
                 region=self.config.region,
                 profile_id=self.config.profile_id,
+                device=self.config.device,
+                mobile_model=self.config.mobile_model,
+                proxy=self.config.proxy,  # Override profile's stored proxy (if provided)
             )
 
             self._session_id = session_data.get("id")
@@ -113,27 +117,48 @@ class CloudBrowser:
             raise
 
     async def close(self) -> None:
-        """Close browser and cleanup session."""
-        # Close browser connection
-        if self._browser:
-            await self._browser.close()
-            self._browser = None
+        """Close browser and cleanup session.
 
-        if self._playwright:
-            await self._playwright.stop()
-            self._playwright = None
-
-        # Notify API that session is finished
+        Order matters: finish_session() is called BEFORE closing the CDP
+        connection so the worker receives the FINISHING signal while the
+        connection is still alive. Closing CDP first would leave the worker
+        running until max-duration timeout if the signal never arrives.
+        """
+        # 1. Signal worker to stop BEFORE dropping the CDP connection.
         if self._api_client and self._session_id:
             try:
-                await self._api_client.finish_session(self._session_id)
+                await asyncio.wait_for(
+                    self._api_client.finish_session(self._session_id),
+                    timeout=5.0,
+                )
                 logger.info(f"Session {self._session_id} finished")
             except Exception as e:
                 logger.warning(f"Failed to finish session: {e}")
 
+        # 2. Now safely drop the CDP connection.
+        if self._browser:
+            try:
+                await self._browser.close()
+            except Exception as e:
+                logger.warning(f"Failed to close browser connection: {e}")
+            finally:
+                self._browser = None
+
+        if self._playwright:
+            try:
+                await self._playwright.stop()
+            except Exception as e:
+                logger.warning(f"Failed to stop playwright: {e}")
+            finally:
+                self._playwright = None
+
         if self._api_client:
-            await self._api_client.close()
-            self._api_client = None
+            try:
+                await self._api_client.close()
+            except Exception as e:
+                logger.warning(f"Failed to close API client: {e}")
+            finally:
+                self._api_client = None
 
         self._session_id = None
         self._ws_endpoint = None
