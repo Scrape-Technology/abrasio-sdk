@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "patchright>=1.49.0",
+    "patchright>=1.58.0",
     "httpx>=0.25.0",
 ]
 

@@ -67,11 +67,13 @@ class AbrasioConfig:
         profile_id: Persistent profile ID for cloud mode
         auto_configure_region: Auto-configure locale/timezone from region/IP (default: True)
         extra_args: Extra browser launch arguments
+        humanize: Humanize all browser interactions (mouse, keyboard, scroll). Default: False.
+        humanize_speed: Speed multiplier for humanized interactions (1.0 = normal). Default: 1.0.
     """
 
     # Core settings
     api_key: Optional[str] = field(default_factory=lambda: os.getenv("ABRASIO_API_KEY"))
-    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "http://localhost:8000"))
+    api_url: str = field(default_factory=lambda: os.getenv("ABRASIO_API_URL", "https://abrasio-api.scrapetechnology.com"))
     url: Optional[str] = None
 
     # Browser settings
@@ -102,6 +104,10 @@ class AbrasioConfig:
     # Advanced
     extra_args: List[str] = field(default_factory=list)
     debug: bool = False
+
+    # Humanization
+    humanize: bool = False
+    humanize_speed: float = 1.0
 
     # Internal: stores validation warnings
     _region_warnings: List[str] = field(default_factory=list, repr=False)

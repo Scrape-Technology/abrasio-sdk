@@ -158,6 +158,15 @@ class StealthBrowser:
         # Inject fingerprint noise scripts if configured
         await self._inject_fingerprint_noise()
 
+        # Humanize all page interactions if requested
+        if self.config.humanize:
+            from ..human.actions import humanize_context
+            await humanize_context(
+                self._context,
+                headless=self.config.headless,
+                speed_factor=self.config.humanize_speed,
+            )
+
         logger.info(f"Patchright browser started (headless={self.config.headless})")
         logger.debug(f"User data dir: {self._user_data_dir}")
         logger.debug(f"Launch args: {args}")

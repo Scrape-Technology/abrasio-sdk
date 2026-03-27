@@ -110,6 +110,17 @@ class CloudBrowser:
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.connect_over_cdp(self._ws_endpoint)
 
+            # Humanize all page interactions if requested
+            if self.config.humanize:
+                from ..human.actions import humanize_context
+                contexts = self._browser.contexts
+                if contexts:
+                    await humanize_context(
+                        contexts[0],
+                        headless=self.config.headless,
+                        speed_factor=self.config.humanize_speed,
+                    )
+
             logger.info("Connected to cloud browser")
         except Exception:
             # Cleanup on failure to prevent resource leaks

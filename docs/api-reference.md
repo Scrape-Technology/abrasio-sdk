@@ -92,7 +92,7 @@ class AbrasioConfig:
 
     # Core settings
     api_key: Optional[str] = None           # From ABRASIO_API_KEY env
-    api_url: str = "https://abrasio.scrapetechnology.com"  # From ABRASIO_API_URL env
+    api_url: str = "https://abrasio-api.scrapetechnology.com"  # From ABRASIO_API_URL env
     url: Optional[str] = None               # Target URL (cloud mode)
 
     # Browser settings
