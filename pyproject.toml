@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "abrasio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Stealth web scraping SDK with optional cloud browser support"
 readme = "README.md"
 license = "MIT"
@@ -49,7 +49,7 @@ fingerprint = [
     "browserforge>=1.0.0",
 ]
 tls = [
-    "curl_cffi>=0.6.0",
+    "curl_cffi>=0.14.0",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -58,8 +58,8 @@ dev = [
     "ruff>=0.1.0",
 ]
 all = [
-    "browserforge>=1.0.0",
-    "curl_cffi>=0.6.0",
+    "browserforge>=1.2.4",
+    "curl_cffi>=0.14.0",
 ]
 
 [project.urls]
