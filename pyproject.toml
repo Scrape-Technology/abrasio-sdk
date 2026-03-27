@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
 authors = [
-    { name = "Abrasio Team", email = "team@abrasio.io" }
+    { name = "Scrape Technology", email = "joao.sobhie@scrapetechnology.com" }
 ]
 keywords = [
     "scraping",
@@ -63,9 +63,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/abrasio/abrasio-sdk"
-Documentation = "https://docs.abrasio.io"
-Repository = "https://github.com/abrasio/abrasio-sdk"
+Homepage = "https://github.com/Scrape-Technology/abrasio-sdk"
+Documentation = "https://scrapetechnology.com/abrasio"
+Repository = "https://github.com/Scrape-Technology/abrasio-sdk"
 
 [tool.hatch.build.targets.wheel]
 packages = ["abrasio"]
