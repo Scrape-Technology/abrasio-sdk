@@ -128,7 +128,16 @@ class StealthBrowser:
         # Proxy configuration
         proxy = None
         if self.config.proxy:
-            proxy = self.config.proxy
+            if isinstance(self.config.proxy, dict):
+                proxy = dict(self.config.proxy)
+                server = proxy.get("server", "")
+                if server and "://" not in server:
+                    proxy["server"] = "http://" + server
+            else:
+                server = self.config.proxy
+                if "://" not in server:
+                    server = "http://" + server
+                proxy = {"server": server}
 
         # Launch with persistent context for maximum stealth
         # Key: use channel="chrome" for real Chrome, not Chromium

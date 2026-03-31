@@ -1,48 +1,66 @@
+# Publishes abrasio (Python SDK) to PyPI on every push of a version tag (v*.*.*).
+#
+# How to release:
+#   1. Bump "version" in pyproject.toml
+#   2. git add pyproject.toml && git commit -m "chore: bump to vX.Y.Z"
+#   3. git tag vX.Y.Z && git push origin vX.Y.Z
+#
+# Required GitHub secret:
+#   PYPI_TOKEN  — API token from pypi.org (Account Settings → API tokens → Add token)
+#                 Scope: the "abrasio" project (or "Entire account" for the first publish)
+
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-  build:
-    name: Build distribution
+  publish:
+    name: Build & publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create a GitHub Release
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build
+        run: pip install hatch build twine
 
-      - name: Build package
+      - name: Verify version matches tag
+        run: |
+          PKG_VERSION="v$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          TAG_VERSION="${GITHUB_REF_NAME}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ pyproject.toml version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✅ Version match: $PKG_VERSION"
+
+      - name: Build wheel and sdist
         run: python -m build
 
-      - name: Upload dist artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-  publish:
-    name: Publish to PyPI
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download dist artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      - name: Check distribution
+        run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "abrasio ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: dist/*

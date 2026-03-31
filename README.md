@@ -490,6 +490,16 @@ abrasio-sdk/
 - [BrowserForge](https://github.com/daijro/browserforge) - Fingerprint generation
 - [Ghost Cursor](https://github.com/Xetera/ghost-cursor) - Bezier curve mouse movements
 
+## Support & Community
+
+| Channel | Link |
+|---------|------|
+| 💬 Discord | [discord.gg/GBSKsC8DvS](https://discord.gg/GBSKsC8DvS) |
+| 📧 Email | [joao.sobhie@scrapetechnology.com](mailto:joao.sobhie@scrapetechnology.com) |
+| 🌐 Docs | [scrapetechnology.com/abrasio/docs](https://scrapetechnology.com/abrasio/docs) |
+
+For bug reports and feature requests, open a thread in the `#abrasio-feedback` channel on Discord.
+
 ## License
 
 Proprietary - Scrape Technology

@@ -175,7 +175,15 @@ class AbrasioAPIClient:
         if mobile_model:
             payload["mobile_model"] = mobile_model
         if proxy:
-            payload["proxy"] = proxy if isinstance(proxy, dict) else {"server": proxy}
+            if isinstance(proxy, dict):
+                proxy_normalized = dict(proxy)
+                server = proxy_normalized.get("server", "")
+                if server and "://" not in server:
+                    proxy_normalized["server"] = "http://" + server
+                payload["proxy"] = proxy_normalized
+            else:
+                server = proxy if "://" in proxy else "http://" + proxy
+                payload["proxy"] = {"server": server}
 
         return await self._request_with_retry("post", "/v1/browser/session/", json=payload)
 
