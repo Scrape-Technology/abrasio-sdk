@@ -211,7 +211,7 @@ class AbrasioConfig:
     @property
     def is_cloud_mode(self) -> bool:
         """Check if running in cloud mode (has API key)."""
-        return self.api_key is not None and self.api_key.startswith("sk_")
+        return self.api_key is not None and self.api_key.startswith("abr_")
 
     @property
     def is_local_mode(self) -> bool:
