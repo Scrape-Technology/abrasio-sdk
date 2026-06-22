@@ -138,26 +138,29 @@ class Abrasio:
                 self._browser = None
         logger.info("Browser closed")
 
-    async def new_page(self) -> "Page":
+    async def new_page(self, **kwargs) -> "Page":
         """
         Create a new page.
+
+        Args:
+            **kwargs: Passed to new_context() when creating the page context
+                      (e.g. ignore_https_errors=True). Ignored if the profile
+                      context already exists and no kwargs are provided.
 
         Returns:
             Patchright Page object with stealth enhancements
         """
         if not self._browser:
             raise AbrasioError("Browser not started. Use 'async with Abrasio()' or call start() first.")
-        return await self._browser.new_page()
+        return await self._browser.new_page(**kwargs)
 
     async def new_context(self, **kwargs) -> "BrowserContext":
         """
-        Create a new browser context.
+        Return a browser context.
 
-        Note: With Patchright persistent context, this returns the main context.
-        Creating multiple contexts can reduce stealth.
-
-        Args:
-            **kwargs: Patchright context options
+        No kwargs → returns the profile context (contexts[0]) with extensions active.
+        With kwargs (e.g. ignore_https_errors=True) → creates a new context passing
+        the options directly to Patchright.
 
         Returns:
             Patchright BrowserContext object

@@ -162,6 +162,8 @@ class StealthBrowser:
             ],
             # Permissions that real browsers have
             permissions=["geolocation", "notifications"],
+            # TLS Client Authentication (e.g. ICP-Brasil certs for gov.br logins)
+            client_certificates=self.config.client_certificates,
         )
 
         # Inject fingerprint noise scripts if configured

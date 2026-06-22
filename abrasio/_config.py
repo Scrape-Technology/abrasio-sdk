@@ -69,6 +69,10 @@ class AbrasioConfig:
         extra_args: Extra browser launch arguments
         humanize: Humanize all browser interactions (mouse, keyboard, scroll). Default: False.
         humanize_speed: Speed multiplier for humanized interactions (1.0 = normal). Default: 1.0.
+        client_certificates: TLS client certificates for sites requiring client-cert auth
+            (e.g. ICP-Brasil logins on gov.br). Build entries with
+            `abrasio.build_client_certificate(...)`. In cloud mode, setting this causes
+            a dedicated browser context to be created instead of reusing the default one.
     """
 
     # Core settings
@@ -100,6 +104,11 @@ class AbrasioConfig:
 
     # Fingerprint protection (local mode only - ignored in cloud mode)
     fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
+
+    # TLS Client Authentication: list of dicts built by build_client_certificate(),
+    # e.g. [{"origin": "https://sso.acesso.gov.br", "pfxPath": "...", "passphrase": "..."}]
+    # repr=False to avoid leaking cert/key bytes or passphrases in logs.
+    client_certificates: Optional[List[Dict[str, Any]]] = field(default=None, repr=False)
 
     # Advanced
     extra_args: List[str] = field(default_factory=list)

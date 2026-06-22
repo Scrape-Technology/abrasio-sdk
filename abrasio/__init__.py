@@ -39,6 +39,7 @@ Usage:
 
 from ._api import Abrasio
 from ._config import AbrasioConfig, FingerprintConfig
+from .utils.certificates import build_client_certificate
 from ._exceptions import (
     AbrasioError,
     AuthenticationError,
@@ -50,11 +51,12 @@ from ._exceptions import (
     BlockedError,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.4"
 __all__ = [
     "Abrasio",
     "AbrasioConfig",
     "FingerprintConfig",
+    "build_client_certificate",
     "AbrasioError",
     "AuthenticationError",
     "SessionError",

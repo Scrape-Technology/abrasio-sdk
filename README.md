@@ -1,7 +1,7 @@
 # Abrasio SDK
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)]()
+[![Version 0.1.4](https://img.shields.io/badge/version-0.1.4-blue.svg)]()
 
 **Undetected web scraping SDK** inspired on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
 
@@ -15,6 +15,7 @@
 | **Human Behavior** | Bezier mouse movements, natural typing, smooth scrolling |
 | **TLS Fingerprinting** | curl_cffi for JA3/JA4 TLS fingerprint matching |
 | **Fingerprint Config** | Control WebGL, WebRTC, canvas/audio noise per session |
+| **Client Certificates** | TLS Client Auth for sites that require a client cert (e.g. ICP-Brasil/gov.br logins) |
 | **Playwright API** | Same API you already know |
 
 ## Anti-Detection Status
@@ -41,6 +42,7 @@
 - [Human-Like Behavior](#human-like-behavior)
 - [TLS Fingerprinting (HTTP)](#tls-fingerprinting-http)
 - [Configuration](#configuration)
+- [Client Certificates](#client-certificates)
 - [Cloud Mode](#cloud-mode-paid)
 - [Error Handling](#error-handling)
 - [API Reference](#api-reference)
@@ -262,6 +264,9 @@ config = AbrasioConfig(
     # Cloud mode
     profile_id="my-profile",
 
+    # Client certificates (see Client Certificates section)
+    client_certificates=None,
+
     # Advanced
     extra_args=[],
     debug=False,
@@ -297,6 +302,44 @@ Without explicit region, locale/timezone are auto-detected from your public IP.
 |----------|-------------|---------|
 | `ABRASIO_API_KEY` | API key for cloud mode | `None` |
 | `ABRASIO_API_URL` | API base URL | `https://abrasio.scrapetechnology.com/` |
+
+## Client Certificates
+
+Some sites require **TLS Client Authentication** during login — the browser must present a
+client certificate during the TLS handshake (e.g. ICP-Brasil digital certificates used to log
+into gov.br services). This is a native Playwright/Patchright context option
+(`client_certificates`), not a CDP command — it must be configured before the page navigates,
+so it's passed through `AbrasioConfig`/`Abrasio(...)` rather than injected into an already-open
+page.
+
+Build a certificate entry with `build_client_certificate(...)`, which accepts either a PEM pair
+(`cert`/`cert_path` + `key`/`key_path`) or a PFX/PKCS12 bundle (`pfx`/`pfx_path`), both with an
+optional `passphrase`:
+
+```python
+from abrasio import Abrasio, build_client_certificate
+
+cert = build_client_certificate(
+    origin="https://sso.acesso.gov.br",   # exact origin the cert is valid for
+    pfx_path="certificado.pfx",           # or cert_path= / key_path= for a PEM pair
+    passphrase="minha-senha",
+)
+
+async with Abrasio(
+    api_key="sk_live_xxx",   # cloud mode; also works in local (no api_key) mode
+    region="BR",
+    client_certificates=[cert],
+) as browser:
+    page = await browser.new_page()
+    await page.goto("https://sso.acesso.gov.br/login")
+```
+
+| Mode | Behavior |
+|------|----------|
+| **Local** | Applied directly when the persistent browser context launches. |
+| **Cloud** | The SDK creates a dedicated browser context with the certificate attached, instead of reusing the default pre-configured (fingerprint) context, since `client_certificates` can only be set at context-creation time. |
+
+> Without `client_certificates` set, behavior is unchanged in both modes.
 
 ## Cloud Mode (Paid)
 

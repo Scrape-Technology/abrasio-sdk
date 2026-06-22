@@ -29,6 +29,9 @@ from .geolocation import (
     GeoLocation,
 )
 
+# Client certificates (TLS Client Authentication)
+from .certificates import build_client_certificate
+
 __all__ = [
     # Human behavior
     "human_move_to",
@@ -51,6 +54,8 @@ __all__ = [
     "get_locale_timezone_from_ip",
     "clear_geolocation_cache",
     "GeoLocation",
+    # Client certificates
+    "build_client_certificate",
 ]
 
 # Optional fingerprint utilities (requires browserforge)
