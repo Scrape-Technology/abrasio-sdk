@@ -30,7 +30,7 @@ from .geolocation import (
 )
 
 # Client certificates (TLS Client Authentication)
-from .certificates import build_client_certificate
+from .certificates import build_client_certificate, materialize_certificate, route_with_client_certificate
 
 __all__ = [
     # Human behavior
@@ -56,6 +56,8 @@ __all__ = [
     "GeoLocation",
     # Client certificates
     "build_client_certificate",
+    "materialize_certificate",
+    "route_with_client_certificate",
 ]
 
 # Optional fingerprint utilities (requires browserforge)

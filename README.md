@@ -1,7 +1,7 @@
 # Abrasio SDK
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Version 0.1.4](https://img.shields.io/badge/version-0.1.4-blue.svg)]()
+[![Version 0.1.5](https://img.shields.io/badge/version-0.1.5-blue.svg)]()
 
 **Undetected web scraping SDK** inspired on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
 
@@ -15,7 +15,7 @@
 | **Human Behavior** | Bezier mouse movements, natural typing, smooth scrolling |
 | **TLS Fingerprinting** | curl_cffi for JA3/JA4 TLS fingerprint matching |
 | **Fingerprint Config** | Control WebGL, WebRTC, canvas/audio noise per session |
-| **Client Certificates** | TLS Client Auth for sites that require a client cert (e.g. ICP-Brasil/gov.br logins) |
+| **Client Certificates** | TLS Client Auth for sites that require a client cert (e.g. ICP-Brasil/gov.br logins); works in cloud mode via request interception |
 | **Playwright API** | Same API you already know |
 
 ## Anti-Detection Status
@@ -62,6 +62,9 @@ pip install abrasio[tls]
 
 # Optional: fingerprint generation utilities
 pip install abrasio[fingerprint]
+
+# Optional: client certificates (PFX/PKCS12 -> PEM conversion)
+pip install abrasio[cert]
 
 # Install everything
 pip install abrasio[all]
@@ -264,7 +267,7 @@ config = AbrasioConfig(
     # Cloud mode
     profile_id="my-profile",
 
-    # Client certificates (see Client Certificates section)
+    # Client certificates - local mode only (see Client Certificates section)
     client_certificates=None,
 
     # Advanced
@@ -307,39 +310,63 @@ Without explicit region, locale/timezone are auto-detected from your public IP.
 
 Some sites require **TLS Client Authentication** during login — the browser must present a
 client certificate during the TLS handshake (e.g. ICP-Brasil digital certificates used to log
-into gov.br services). This is a native Playwright/Patchright context option
-(`client_certificates`), not a CDP command — it must be configured before the page navigates,
-so it's passed through `AbrasioConfig`/`Abrasio(...)` rather than injected into an already-open
-page.
+into gov.br services). There are two ways to do this, and which one works depends on the mode:
 
-Build a certificate entry with `build_client_certificate(...)`, which accepts either a PEM pair
-(`cert`/`cert_path` + `key`/`key_path`) or a PFX/PKCS12 bundle (`pfx`/`pfx_path`), both with an
-optional `passphrase`:
+```bash
+pip install abrasio[cert]   # cryptography, only needed to convert PFX/PKCS12 -> PEM
+```
 
 ```python
-from abrasio import Abrasio, build_client_certificate
+from abrasio import build_client_certificate
 
 cert = build_client_certificate(
     origin="https://sso.acesso.gov.br",   # exact origin the cert is valid for
     pfx_path="certificado.pfx",           # or cert_path= / key_path= for a PEM pair
     passphrase="minha-senha",
 )
+```
 
-async with Abrasio(
-    api_key="sk_live_xxx",   # cloud mode; also works in local (no api_key) mode
-    region="BR",
-    client_certificates=[cert],
-) as browser:
+### Local mode: native `client_certificates`
+
+Playwright/Patchright support `client_certificates` as a context option, applied when the
+browser launches. Pass it to `AbrasioConfig`/`Abrasio(...)`:
+
+```python
+async with Abrasio(headless=False, client_certificates=[cert]) as browser:
     page = await browser.new_page()
     await page.goto("https://sso.acesso.gov.br/login")
 ```
 
-| Mode | Behavior |
-|------|----------|
-| **Local** | Applied directly when the persistent browser context launches. |
-| **Cloud** | The SDK creates a dedicated browser context with the certificate attached, instead of reusing the default pre-configured (fingerprint) context, since `client_certificates` can only be set at context-creation time. |
+**This only works in local mode.** Under the hood, Playwright applies it via a local SOCKS proxy
+that the browser dials back into — that requires the browser and the Playwright driver to be on
+the same machine. In cloud mode the browser runs on Abrasio's infrastructure, so that proxy is
+unreachable and the certificate is silently never used.
 
-> Without `client_certificates` set, behavior is unchanged in both modes.
+### Cloud mode (and local too): `route_with_certificate`
+
+Intercept the specific certificate-login request and replay it outside the browser using
+`httpx` (which supports client certificates natively), then feed the real response back into
+the browser. Since the interception always runs in the driver process — never inside the
+browser itself — this works regardless of where the browser runs:
+
+```python
+async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+    page = await browser.new_page()
+    await page.goto("https://sso.acesso.gov.br/login")
+
+    certificate_button = page.locator("#login-certificate")
+    form_action = await certificate_button.get_attribute("formaction")
+
+    await browser.route_with_certificate(page, form_action, cert)
+    await certificate_button.click()
+```
+
+`route_with_certificate` defaults the replay request's proxy to the session's configured
+`proxy`, so the authenticated request leaves through the same exit IP as the rest of the
+browser session — important, since an IP mismatch between normal navigation and the
+certificate-authenticated request is exactly the kind of signal sites use to flag a session.
+
+See `examples/certificado.py` for a full working example.
 
 ## Cloud Mode (Paid)
 
@@ -427,6 +454,7 @@ class Abrasio:
     async def close(self) -> None: ...
     async def new_page(self) -> Page: ...
     async def new_context(self, **kwargs) -> BrowserContext: ...
+    async def route_with_certificate(self, target, url, certificate, *, proxy=None) -> None: ...
 
     @property
     def browser(self): ...       # Browser (cloud) or BrowserContext (local)
@@ -515,13 +543,15 @@ abrasio-sdk/
 │   └── utils/
 │       ├── human.py         # Human behavior simulation
 │       ├── fingerprint.py   # Region config, validation
-│       └── geolocation.py   # IP-based locale detection
+│       ├── geolocation.py   # IP-based locale detection
+│       └── certificates.py  # Client certificates (TLS Client Auth)
 ├── examples/
 │   ├── basic_local.py       # Local mode example
 │   ├── basic_cloud.py       # Cloud mode example
 │   ├── human_behavior.py    # Human behavior demo
 │   ├── fingerprint_check.py # Fingerprint validation
-│   └── tls_fingerprint.py   # TLS fingerprinting
+│   ├── tls_fingerprint.py   # TLS fingerprinting
+│   └── certificado.py       # Client certificate login (gov.br)
 ├── docs/                    # Documentation
 └── pyproject.toml
 ```

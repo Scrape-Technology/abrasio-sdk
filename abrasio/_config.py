@@ -71,8 +71,11 @@ class AbrasioConfig:
         humanize_speed: Speed multiplier for humanized interactions (1.0 = normal). Default: 1.0.
         client_certificates: TLS client certificates for sites requiring client-cert auth
             (e.g. ICP-Brasil logins on gov.br). Build entries with
-            `abrasio.build_client_certificate(...)`. In cloud mode, setting this causes
-            a dedicated browser context to be created instead of reusing the default one.
+            `abrasio.build_client_certificate(...)`. **Local mode only** — Playwright applies
+            this via a local SOCKS proxy that the browser must dial back into, which only
+            works when the browser runs on the same machine as the driver. In cloud mode
+            (remote browser), use `Abrasio.route_with_certificate(...)` instead, which
+            intercepts and replays the specific request outside the browser.
     """
 
     # Core settings

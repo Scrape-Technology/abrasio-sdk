@@ -184,6 +184,35 @@ class Abrasio:
             return self._browser.context
         raise AbrasioError("Browser object not available.")
 
+    async def route_with_certificate(
+        self,
+        target,
+        url,
+        certificate: Dict,
+        *,
+        proxy: Optional[Union[str, Dict[str, str]]] = None,
+    ) -> None:
+        """
+        Intercept `url` on `target` (a Page or BrowserContext) and replay it outside
+        the browser using a TLS client certificate, via httpx.
+
+        Use this for sites requiring client-cert auth (e.g. ICP-Brasil logins on
+        gov.br). Unlike `client_certificates` in `AbrasioConfig` (local mode only),
+        this works in both local and cloud mode, since the interception always runs
+        in the driver process regardless of where the browser itself runs.
+
+        Args:
+            target: Page or BrowserContext to intercept requests on.
+            url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
+            certificate: A dict built with `abrasio.build_client_certificate(...)`.
+            proxy: Proxy to replay the request through. Defaults to the session's
+                configured proxy, to keep a consistent exit IP with the rest of
+                the browser session.
+        """
+        from .utils.certificates import route_with_client_certificate
+
+        await route_with_client_certificate(target, url, certificate, proxy=proxy or self.config.proxy)
+
     @property
     def live_view_url(self) -> Optional[str]:
         """Get the live view URL for real-time browser streaming (cloud mode only)."""

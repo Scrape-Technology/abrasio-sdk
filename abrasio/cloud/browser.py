@@ -39,7 +39,6 @@ class CloudBrowser:
         self._session_id: Optional[str] = None
         self._ws_endpoint: Optional[str] = None
         self._live_view_url: Optional[str] = None
-        self._cert_context: Optional[BrowserContext] = None
 
     @property
     def browser(self) -> Browser:
@@ -155,7 +154,6 @@ class CloudBrowser:
                 logger.warning(f"Failed to close browser connection: {e}")
             finally:
                 self._browser = None
-                self._cert_context = None
 
         if self._playwright:
             try:
@@ -183,10 +181,6 @@ class CloudBrowser:
         Note: In cloud mode, context options may be limited as the
         browser is pre-configured with specific fingerprints.
 
-        Exception: if `client_certificates` is configured, a dedicated context
-        is created with that option (it can only be set at context-creation
-        time), instead of reusing the default pre-configured context.
-
         Args:
             **kwargs: Patchright context options (may be ignored)
 
@@ -195,9 +189,6 @@ class CloudBrowser:
         """
         if not self._browser:
             raise RuntimeError("Browser not connected")
-
-        if self.config.client_certificates:
-            return await self._get_or_create_cert_context(**kwargs)
 
         # For cloud browsers, we typically use the default context
         # that's pre-configured with the fingerprint
@@ -217,29 +208,12 @@ class CloudBrowser:
         if not self._browser:
             raise RuntimeError("Browser not connected")
 
-        if self.config.client_certificates:
-            context = await self._get_or_create_cert_context()
+        # Get or create context
+        contexts = self._browser.contexts
+        if contexts:
+            context = contexts[0]
         else:
-            # Get or create context
-            contexts = self._browser.contexts
-            if contexts:
-                context = contexts[0]
-            else:
-                context = await self._browser.new_context()
+            context = await self._browser.new_context()
 
         page = await context.new_page()
         return page
-
-    async def _get_or_create_cert_context(self, **kwargs) -> BrowserContext:
-        """
-        Get the dedicated context created for client certificates, creating it
-        on first use. `client_certificates` can only be applied when a context
-        is created, so this context is reused across calls instead of falling
-        back to the default pre-configured context.
-        """
-        if self._cert_context is None:
-            self._cert_context = await self._browser.new_context(
-                client_certificates=self.config.client_certificates,
-                **kwargs,
-            )
-        return self._cert_context
