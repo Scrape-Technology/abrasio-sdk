@@ -168,6 +168,7 @@ async def route_with_client_certificate(
     certificate: Dict[str, Any],
     *,
     proxy: Optional[Union[str, Dict[str, str]]] = None,
+    timeout: float = 30.0,
 ) -> None:
     """
     Intercept `url` on `target` (a Patchright `Page` or `BrowserContext`) and replay it
@@ -183,6 +184,10 @@ async def route_with_client_certificate(
         certificate: A dict shaped like `build_client_certificate()`'s output.
         proxy: Proxy to replay the request through (string or `{"server","username","password"}`).
             Should match the browser session's proxy to keep a consistent exit IP.
+        timeout: Request timeout in seconds. Defaults to 30s — httpx's own default (5s) is
+            too short when replaying through a proxy to a slow/distant host, and a timeout
+            here causes the route to abort, which leaves the page on a failed navigation
+            (`chrome-error://chromewebdata/`).
     """
     cert_path, key_path, passphrase = materialize_certificate(certificate)
     httpx_proxy = _normalize_proxy(proxy)
@@ -191,6 +196,7 @@ async def route_with_client_certificate(
         cert=(cert_path, key_path, passphrase) if passphrase else (cert_path, key_path),
         proxy=httpx_proxy,
         verify=True,
+        timeout=timeout,
     )
 
     async def _handler(route: Any) -> None:

@@ -1,7 +1,7 @@
 # Abrasio SDK
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Version 0.1.5](https://img.shields.io/badge/version-0.1.5-blue.svg)]()
+[![Version 0.1.6](https://img.shields.io/badge/version-0.1.6-blue.svg)]()
 
 **Undetected web scraping SDK** inspired on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
 
@@ -366,6 +366,15 @@ async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
 browser session — important, since an IP mismatch between normal navigation and the
 certificate-authenticated request is exactly the kind of signal sites use to flag a session.
 
+It also defaults `timeout` to the session's configured `timeout` (`AbrasioConfig.timeout`,
+30s by default) instead of httpx's own 5s default — going through a proxy to a government
+auth server can easily take longer than that. If you see the route time out (the page ends up
+on `chrome-error://chromewebdata/`), pass a larger `timeout=` explicitly:
+
+```python
+await browser.route_with_certificate(page, form_action, cert, timeout=60)
+```
+
 See `examples/certificado.py` for a full working example.
 
 ## Cloud Mode (Paid)
@@ -454,7 +463,7 @@ class Abrasio:
     async def close(self) -> None: ...
     async def new_page(self) -> Page: ...
     async def new_context(self, **kwargs) -> BrowserContext: ...
-    async def route_with_certificate(self, target, url, certificate, *, proxy=None) -> None: ...
+    async def route_with_certificate(self, target, url, certificate, *, proxy=None, timeout=None) -> None: ...
 
     @property
     def browser(self): ...       # Browser (cloud) or BrowserContext (local)

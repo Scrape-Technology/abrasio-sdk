@@ -191,6 +191,7 @@ class Abrasio:
         certificate: Dict,
         *,
         proxy: Optional[Union[str, Dict[str, str]]] = None,
+        timeout: Optional[float] = None,
     ) -> None:
         """
         Intercept `url` on `target` (a Page or BrowserContext) and replay it outside
@@ -208,10 +209,21 @@ class Abrasio:
             proxy: Proxy to replay the request through. Defaults to the session's
                 configured proxy, to keep a consistent exit IP with the rest of
                 the browser session.
+            timeout: Request timeout in seconds. Defaults to the session's configured
+                `timeout` (`AbrasioConfig.timeout`, in ms). Raise this if the replayed
+                request times out when going through a slow proxy — a timeout here
+                aborts the route and leaves the page on a failed navigation
+                (`chrome-error://chromewebdata/`).
         """
         from .utils.certificates import route_with_client_certificate
 
-        await route_with_client_certificate(target, url, certificate, proxy=proxy or self.config.proxy)
+        await route_with_client_certificate(
+            target,
+            url,
+            certificate,
+            proxy=proxy or self.config.proxy,
+            timeout=timeout if timeout is not None else self.config.timeout / 1000,
+        )
 
     @property
     def live_view_url(self) -> Optional[str]:
