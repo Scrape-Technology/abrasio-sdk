@@ -1,7 +1,9 @@
 """Cloud browser implementation using Abrasio API with Patchright."""
 
 from typing import Optional, TYPE_CHECKING
+from urllib.parse import urlsplit
 import asyncio
+import ipaddress
 import logging
 
 from patchright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -14,6 +16,40 @@ if TYPE_CHECKING:
     from patchright.async_api import Playwright
 
 logger = logging.getLogger("abrasio.cloud")
+
+# RFC 6598 Shared Address Space (CGNAT). Not publicly routable, but Python's
+# ipaddress.is_private doesn't flag it (confirmed unflagged through 3.14) —
+# check it explicitly alongside the standard private/reserved ranges.
+_CGNAT_RANGE = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _assert_routable_ws_endpoint(ws_endpoint: str, session_id: Optional[str]) -> None:
+    """
+    Reject ws_endpoint hosts that can never be reachable over the public internet.
+
+    A legitimate Abrasio session always returns a publicly routable host. Seeing a
+    private/CGNAT/loopback/link-local IP here means the response didn't come from
+    our API at all (e.g. a transparent proxy or cache on the client's network
+    intercepted/fabricated it) — fail fast with a clear message instead of hanging
+    until the OS connect timeout (which can take minutes).
+    """
+    host = urlsplit(ws_endpoint).hostname
+    if not host:
+        return
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return  # Hostname, not a literal IP — DNS will resolve it normally.
+
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified or ip in _CGNAT_RANGE:
+        raise SessionError(
+            f"Received a non-routable WebSocket endpoint ({ws_endpoint}). "
+            "This usually means a proxy, firewall, or cache on your network "
+            "intercepted the connection to the Abrasio API instead of forwarding "
+            "it — this response did not originate from Abrasio. Check your "
+            "network's outbound HTTPS path to the Abrasio API.",
+            session_id,
+        )
 
 
 class CloudBrowser:
@@ -96,6 +132,8 @@ class CloudBrowser:
             self._ws_endpoint = session.get("ws_endpoint")
             if not self._ws_endpoint:
                 raise SessionError("No WebSocket endpoint returned", self._session_id)
+
+            #_assert_routable_ws_endpoint(self._ws_endpoint, self._session_id)
 
             # Show live view URL if available
             live_view_url = session.get("live_view_url")

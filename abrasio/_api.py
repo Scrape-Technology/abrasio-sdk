@@ -192,10 +192,14 @@ class Abrasio:
         *,
         proxy: Optional[Union[str, Dict[str, str]]] = None,
         timeout: Optional[float] = None,
+        retries: int = 2,
+        retry_backoff: float = 1.0,
+        impersonate: str = "chrome",
     ) -> None:
         """
         Intercept `url` on `target` (a Page or BrowserContext) and replay it outside
-        the browser using a TLS client certificate, via httpx.
+        the browser using a TLS client certificate, via curl_cffi (impersonating a real
+        browser's TLS/HTTP fingerprint).
 
         Use this for sites requiring client-cert auth (e.g. ICP-Brasil logins on
         gov.br). Unlike `client_certificates` in `AbrasioConfig` (local mode only),
@@ -214,6 +218,12 @@ class Abrasio:
                 request times out when going through a slow proxy — a timeout here
                 aborts the route and leaves the page on a failed navigation
                 (`chrome-error://chromewebdata/`).
+            retries: Extra attempts after the first one if the replay raises (e.g. a flaky
+                proxy). Default 2 (3 attempts total) before aborting the route.
+            retry_backoff: Seconds to wait before each retry, multiplied by the attempt
+                number. Default 1.0.
+            impersonate: `curl_cffi` browser fingerprint to mimic for the replayed request
+                (e.g. "chrome"). Default "chrome".
         """
         from .utils.certificates import route_with_client_certificate
 
@@ -223,6 +233,9 @@ class Abrasio:
             certificate,
             proxy=proxy or self.config.proxy,
             timeout=timeout if timeout is not None else self.config.timeout / 1000,
+            retries=retries,
+            retry_backoff=retry_backoff,
+            impersonate=impersonate,
         )
 
     @property

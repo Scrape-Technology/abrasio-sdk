@@ -11,15 +11,16 @@ Playwright driver to be on the same machine). For **cloud mode** (remote
 browser), use `route_with_client_certificate` below instead: it intercepts the
 specific request via Playwright's `route()` API — which always executes in the
 driver process, regardless of where the browser runs — and replays it outside
-the browser using `httpx`, which supports client certificates natively.
+the browser using `curl_cffi`, which supports client certificates natively and
+can impersonate a real browser's TLS/HTTP fingerprint (requires the `tls` extra:
+`pip install abrasio[tls]`).
 """
 
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
-
-import httpx
 
 from .._exceptions import AbrasioError
 
@@ -162,6 +163,27 @@ def materialize_certificate(certificate: Dict[str, Any]) -> Tuple[str, str, Opti
     return resolved_cert_path, resolved_key_path, passphrase
 
 
+def _decrypt_pem_key(key_path: str, passphrase: str) -> str:
+    """
+    Re-write an encrypted PEM private key as an unencrypted one and return its path.
+
+    curl_cffi's `cert` option only accepts a plain (cert, key) file pair — no passphrase —
+    so an encrypted PEM key needs to be decrypted up front, same as PFX keys already are
+    in `materialize_certificate()`.
+    """
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+    except ImportError as e:
+        raise AbrasioError(
+            "Using a passphrase-protected PEM key requires the 'cryptography' package. "
+            "Install with: pip install abrasio[cert]"
+        ) from e
+
+    private_key = load_pem_private_key(Path(key_path).read_bytes(), password=passphrase.encode())
+    key_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    return _write_temp(".key", key_pem)
+
+
 async def route_with_client_certificate(
     target: Any,
     url: Union[str, Any],
@@ -169,14 +191,24 @@ async def route_with_client_certificate(
     *,
     proxy: Optional[Union[str, Dict[str, str]]] = None,
     timeout: float = 30.0,
+    retries: int = 2,
+    retry_backoff: float = 1.0,
+    impersonate: str = "chrome",
 ) -> None:
     """
     Intercept `url` on `target` (a Patchright `Page` or `BrowserContext`) and replay it
-    outside the browser using the given client certificate, via `httpx`.
+    outside the browser using the given client certificate, via `curl_cffi`. Requires the
+    `tls` extra: `pip install abrasio[tls]`.
 
     This works in both local and cloud mode, unlike Playwright's native
     `client_certificates` option (local mode only) — the route handler always executes in
     the driver process, regardless of where the browser itself runs.
+
+    Uses `curl_cffi` (not `httpx`) so the replayed request's TLS/HTTP fingerprint matches
+    a real Chrome (`impersonate`), instead of Python's default OpenSSL fingerprint — sites
+    with anti-fraud/WAF checks in front of sensitive mTLS endpoints (e.g. ICP-Brasil logins
+    on gov.br) can otherwise flag the mismatch between the browser's own fingerprint and a
+    plain-Python client replaying one of its requests.
 
     Args:
         target: `Page` or `BrowserContext` to intercept requests on.
@@ -184,43 +216,77 @@ async def route_with_client_certificate(
         certificate: A dict shaped like `build_client_certificate()`'s output.
         proxy: Proxy to replay the request through (string or `{"server","username","password"}`).
             Should match the browser session's proxy to keep a consistent exit IP.
-        timeout: Request timeout in seconds. Defaults to 30s — httpx's own default (5s) is
-            too short when replaying through a proxy to a slow/distant host, and a timeout
-            here causes the route to abort, which leaves the page on a failed navigation
-            (`chrome-error://chromewebdata/`).
+        timeout: Request timeout in seconds. Defaults to 30s, since a timeout here aborts
+            the route and leaves the page on a failed navigation (`chrome-error://chromewebdata/`).
+        retries: Extra attempts after the first one if the replay raises (connection/timeout/
+            proxy/SSL errors from a flaky proxy). Default 2 (3 attempts total). Does not retry
+            on HTTP error responses (4xx/5xx) — only on request exceptions, since those are the
+            ones that abort the route instead of returning a real response to the page.
+        retry_backoff: Seconds to wait before each retry, multiplied by the attempt number
+            (1st retry waits `retry_backoff`, 2nd waits `2 * retry_backoff`, ...). Default 1.0.
+        impersonate: `curl_cffi` browser fingerprint to mimic. Default "chrome". Pass None
+            to disable impersonation (plain curl TLS fingerprint).
     """
-    cert_path, key_path, passphrase = materialize_certificate(certificate)
-    httpx_proxy = _normalize_proxy(proxy)
+    try:
+        from curl_cffi.requests import AsyncSession
+    except ImportError as e:
+        raise AbrasioError(
+            "route_with_client_certificate requires the 'curl_cffi' package. "
+            "Install with: pip install abrasio[tls]"
+        ) from e
 
-    client = httpx.AsyncClient(
-        cert=(cert_path, key_path, passphrase) if passphrase else (cert_path, key_path),
-        proxy=httpx_proxy,
-        verify=True,
-        timeout=timeout,
-    )
+    cert_path, key_path, passphrase = materialize_certificate(certificate)
+    if passphrase:
+        key_path = _decrypt_pem_key(key_path, passphrase)
+    cert = (cert_path, key_path)
+    cffi_proxy = _normalize_proxy(proxy)
+
+    client = AsyncSession()
 
     async def _handler(route: Any) -> None:
         request = route.request
-        try:
-            headers = {
-                k: v for k, v in request.headers.items()
-                if k.lower() not in ("content-length", "host")
-            }
-            resp = await client.request(
-                method=request.method,
-                url=request.url,
-                headers=headers,
-                content=request.post_data_buffer,
-                follow_redirects=False,
-            )
-            await route.fulfill(
-                status=resp.status_code,
-                headers=dict(resp.headers),
-                body=resp.content,
-            )
-        except Exception:
-            logger.exception(f"Certificate route replay failed for {request.url}")
-            await route.abort()
+        headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() not in ("content-length", "host")
+        }
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(retries + 1):
+            try:
+                resp = await client.request(
+                    method=request.method,
+                    url=request.url,
+                    headers=headers,
+                    data=request.post_data_buffer,
+                    allow_redirects=False,
+                    cert=cert,
+                    proxy=cffi_proxy,
+                    verify=True,
+                    timeout=timeout,
+                    impersonate=impersonate,
+                )
+                await route.fulfill(
+                    status=resp.status_code,
+                    headers=dict(resp.headers),
+                    body=resp.content,
+                )
+                return
+            except Exception as e:
+                last_exc = e
+                if attempt < retries:
+                    wait = retry_backoff * (attempt + 1)
+                    logger.warning(
+                        f"Certificate route replay attempt {attempt + 1}/{retries + 1} "
+                        f"failed for {request.url}: {e!r}. Retrying in {wait:.1f}s."
+                    )
+                    await asyncio.sleep(wait)
+
+        logger.exception(
+            f"Certificate route replay failed for {request.url} after "
+            f"{retries + 1} attempt(s): {last_exc!r}",
+            exc_info=last_exc,
+        )
+        await route.abort()
 
     await target.route(url, _handler)
 
