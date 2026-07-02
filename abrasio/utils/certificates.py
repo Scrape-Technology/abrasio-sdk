@@ -286,7 +286,19 @@ async def route_with_client_certificate(
             f"{retries + 1} attempt(s): {last_exc!r}",
             exc_info=last_exc,
         )
-        await route.abort()
+        # Fulfill with 502 instead of aborting — route.abort() causes the browser
+        # to navigate to chrome-error://chromewebdata/, which is indistinguishable
+        # from a real navigation and breaks URL-based error detection in callers.
+        # A 502 response keeps the page on a normal HTTP error that callers can handle.
+        error_body = (
+            f"[abrasio] Certificate route replay failed after {retries + 1} "
+            f"attempt(s): {last_exc!r}"
+        ).encode()
+        await route.fulfill(
+            status=502,
+            headers={"content-type": "text/plain; charset=utf-8"},
+            body=error_body,
+        )
 
     await target.route(url, _handler)
 

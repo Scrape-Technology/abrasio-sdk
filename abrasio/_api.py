@@ -210,13 +210,15 @@ class Abrasio:
             target: Page or BrowserContext to intercept requests on.
             url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
             certificate: A dict built with `abrasio.build_client_certificate(...)`.
-            proxy: Proxy to replay the request through. Defaults to the session's
-                configured proxy, to keep a consistent exit IP with the rest of
-                the browser session.
+            proxy: Proxy to replay the request through. Defaults to None (direct
+                connection). Do NOT pass a residential proxy here — mTLS authentication
+                is guaranteed by the client certificate itself (not by exit IP), and
+                residential proxies commonly fail to tunnel mTLS CONNECT correctly,
+                causing 30s timeouts and `chrome-error://chromewebdata/`.
             timeout: Request timeout in seconds. Defaults to the session's configured
                 `timeout` (`AbrasioConfig.timeout`, in ms). Raise this if the replayed
                 request times out when going through a slow proxy — a timeout here
-                aborts the route and leaves the page on a failed navigation
+                causes the page to land on a failed navigation
                 (`chrome-error://chromewebdata/`).
             retries: Extra attempts after the first one if the replay raises (e.g. a flaky
                 proxy). Default 2 (3 attempts total) before aborting the route.
@@ -231,7 +233,7 @@ class Abrasio:
             target,
             url,
             certificate,
-            proxy=proxy or self.config.proxy,
+            proxy=proxy,  # never inherit session proxy — residential proxies break mTLS
             timeout=timeout if timeout is not None else self.config.timeout / 1000,
             retries=retries,
             retry_backoff=retry_backoff,
