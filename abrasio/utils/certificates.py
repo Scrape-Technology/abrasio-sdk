@@ -138,7 +138,12 @@ def _normalize_cert_for_patchright(certificate: Dict[str, Any]) -> Dict[str, Any
 
 
 def _patchright_proxy(proxy: Optional[Union[str, Dict[str, str]]]) -> Optional[Dict[str, str]]:
-    """Convert proxy config (string or dict) to Playwright's proxy dict format."""
+    """Convert proxy config (string or dict) to Playwright's proxy dict format.
+
+    Accepts:
+      - dict:   {"server": "...", "username": "...", "password": "..."} (Playwright format)
+      - string: "host:port" or "http://host:port" or "http://user:pass@host:port"
+    """
     if not proxy:
         return None
     if isinstance(proxy, dict):
@@ -147,8 +152,18 @@ def _patchright_proxy(proxy: Optional[Union[str, Dict[str, str]]]) -> Optional[D
         if server and "://" not in server:
             result["server"] = "http://" + server
         return result
-    server = proxy if "://" in proxy else f"http://{proxy}"
-    return {"server": server}
+    # String — may carry embedded credentials: http://user:pass@host:port
+    from urllib.parse import urlparse as _up
+    if "://" not in proxy:
+        proxy = "http://" + proxy
+    parsed = _up(proxy)
+    port_part = f":{parsed.port}" if parsed.port else ""
+    result: Dict[str, str] = {"server": f"{parsed.scheme}://{parsed.hostname}{port_part}"}
+    if parsed.username:
+        result["username"] = parsed.username
+    if parsed.password:
+        result["password"] = parsed.password
+    return result
 
 
 async def route_with_client_certificate(
@@ -156,49 +171,47 @@ async def route_with_client_certificate(
     url: Union[str, Any],
     certificate: Dict[str, Any],
     *,
-    playwright_instance: Any,
+    playwright_instance: Optional[Any] = None,
+    relay_fn: Optional[Any] = None,
     proxy: Optional[Union[str, Dict[str, str]]] = None,
     timeout: float = 30.0,
     retries: int = 2,
     retry_backoff: float = 1.0,
 ) -> None:
     """
-    Intercept `url` on `target` (a Patchright `Page` or `BrowserContext`) and replay
-    it using the given client certificate, entirely within Patchright's own
-    `APIRequestContext` — no external HTTP client dependencies (no curl_cffi, no httpx).
+    Intercept `url` on `target` (Page or BrowserContext) and replay it with the
+    given client certificate.
 
-    Creates a `playwright_instance.request.new_context(client_certificates=[certificate])`
-    to handle TLS client authentication natively, supporting PEM cert/key pairs,
-    PFX/PKCS12 bundles, and passphrases. The proxy option routes the replay through the
-    same proxy as the browser session, keeping a consistent exit IP and ensuring
-    geo-restricted endpoints (e.g. certificado.sso.acesso.gov.br) are reachable.
+    Two execution modes — exactly one must be provided:
 
-    This works in both local and cloud mode — the route handler and the
-    `APIRequestContext` always execute in the driver process, regardless of where
-    the browser itself runs.
+    **Local mode** (`playwright_instance`):
+        Uses Patchright's own `APIRequestContext` to execute the mTLS request in the
+        driver process. Pass `proxy` to route through a specific exit IP (e.g. a BR
+        proxy when the driver runs outside Brazil).
+
+    **Cloud/relay mode** (`relay_fn`):
+        Calls an async function `relay_fn(cert_pem, key_pem, origin, method, url,
+        headers, body, timeout) -> (status, headers, body)` that executes the request
+        server-side (e.g. via the Abrasio API relay endpoint). The caller never needs
+        to configure a proxy — the relay runs from within the session's region.
 
     Args:
         target: `Page` or `BrowserContext` to intercept requests on.
         url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
-        certificate: A dict shaped like `build_client_certificate()`'s output.
-        playwright_instance: The active Playwright instance (`async_playwright().start()`).
-            Used to create the `APIRequestContext`. Accessible via `self._browser._playwright`
-            inside the `Abrasio` class.
-        proxy: Proxy for the replayed request. Pass the same proxy as the browser
-            session so the request exits from the same IP (required for geo-restricted
-            endpoints like Brazilian government services).
+        certificate: A dict built with `build_client_certificate(...)`.
+        playwright_instance: Active Playwright instance for local-mode execution.
+        relay_fn: Async callable for cloud/relay-mode execution.
+        proxy: Proxy for local-mode replay (ignored in relay mode).
         timeout: Request timeout in seconds. Defaults to 30s.
-        retries: Extra attempts if the replay raises (connection/timeout errors).
-            Default 2 (3 attempts total). Does not retry on HTTP error responses.
-        retry_backoff: Seconds to wait before each retry × attempt number. Default 1.0.
+        retries: Extra attempts on transient failures. Default 2 (3 total).
+        retry_backoff: Seconds × attempt number before each retry. Default 1.0.
     """
-    # Playwright only presents the client cert when the request's origin matches
-    # the certificate's `origin` field exactly. If the route URL is a different
-    # subdomain from the one used in build_client_certificate (e.g. cert origin
-    # is "https://login.esocial.gov.br" but the form posts to
-    # "https://certificado.sso.acesso.gov.br"), the cert is silently omitted and
-    # the server closes the connection with ECONNRESET.
-    # Auto-correct: extract the origin from the route URL and override.
+    if playwright_instance is None and relay_fn is None:
+        raise AbrasioError(
+            "route_with_client_certificate requires either 'playwright_instance' "
+            "(local mode) or 'relay_fn' (cloud/relay mode)."
+        )
+
     # Convert PFX → PEM if needed (handles legacy ICP-Brasil PKCS12 encryption
     # that Node.js/OpenSSL 3 rejects with "Unsupported TLS certificate").
     _cert = _normalize_cert_for_patchright(certificate)
@@ -217,11 +230,14 @@ async def route_with_client_certificate(
             )
             _cert = {**_cert, "origin": _origin}
 
-    request_context = await playwright_instance.request.new_context(
-        client_certificates=[_cert],
-        proxy=_patchright_proxy(proxy),
-        ignore_https_errors=False,
-    )
+    # Local mode: create an APIRequestContext with the client cert.
+    request_context = None
+    if playwright_instance is not None:
+        request_context = await playwright_instance.request.new_context(
+            client_certificates=[_cert],
+            proxy=_patchright_proxy(proxy),
+            ignore_https_errors=False,
+        )
 
     async def _handler(route: Any) -> None:
         request = route.request
@@ -229,20 +245,33 @@ async def route_with_client_certificate(
             k: v for k, v in request.headers.items()
             if k.lower() not in ("content-length", "host")
         }
+        body = request.post_data_buffer
 
         last_exc: Optional[Exception] = None
         for attempt in range(retries + 1):
             try:
-                response = await request_context.fetch(
-                    request.url,
-                    method=request.method,
-                    headers=headers,
-                    data=request.post_data_buffer,
-                    timeout=timeout * 1000,
-                    fail_on_status_code=False,
-                    max_redirects=0,
-                )
-                await route.fulfill(response=response)
+                if relay_fn is not None:
+                    # Cloud/relay mode: delegate to the Abrasio API (runs in Brazil).
+                    cert_pem = _cert.get("cert") or b""
+                    key_pem = _cert.get("key") or b""
+                    origin = _cert.get("origin", "")
+                    status, resp_headers, resp_body = await relay_fn(
+                        cert_pem, key_pem, origin,
+                        request.method, request.url, headers, body, timeout,
+                    )
+                    await route.fulfill(status=status, headers=resp_headers, body=resp_body)
+                else:
+                    # Local mode: replay via local APIRequestContext.
+                    response = await request_context.fetch(
+                        request.url,
+                        method=request.method,
+                        headers=headers,
+                        data=body,
+                        timeout=timeout * 1000,
+                        fail_on_status_code=False,
+                        max_redirects=0,
+                    )
+                    await route.fulfill(response=response)
                 return
             except Exception as e:
                 last_exc = e

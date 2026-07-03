@@ -197,24 +197,22 @@ class Abrasio:
     ) -> None:
         """
         Intercept `url` on `target` (a Page or BrowserContext) and replay it using
-        a TLS client certificate, entirely via Patchright's own `APIRequestContext`.
-        No external HTTP client dependencies (no curl_cffi, no httpx).
+        a TLS client certificate.
 
-        Use this for sites requiring client-cert auth (e.g. ICP-Brasil logins on
-        gov.br). Unlike `client_certificates` in `AbrasioConfig` (local mode only),
-        this works in both local and cloud mode, since the interception always runs
-        in the driver process regardless of where the browser itself runs.
+        **Cloud mode**: delegates to the Abrasio API relay endpoint
+        (`POST /v1/browser/session/{id}/certificate-fetch`). The relay executes the
+        mTLS request from within the session's region/proxy — no proxy configuration
+        needed by the caller, and no proxy credentials are ever exposed to the SDK.
 
-        The replay uses the same Patchright session, so passing `proxy` routes the
-        request through the same exit IP as the browser — required for geo-restricted
-        endpoints like Brazilian government services.
+        **Local mode**: replays via Patchright's own `APIRequestContext`. Pass `proxy`
+        to route through a specific exit IP when the driver process is outside the
+        target country.
 
         Args:
             target: Page or BrowserContext to intercept requests on.
             url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
             certificate: A dict built with `abrasio.build_client_certificate(...)`.
-            proxy: Proxy for the replay. Pass the same proxy as the browser session
-                to keep a consistent exit IP. Defaults to None (direct connection).
+            proxy: Proxy for local-mode replay only. Ignored in cloud mode.
             timeout: Request timeout in seconds. Defaults to the session's configured
                 `timeout` (`AbrasioConfig.timeout`, in ms).
             retries: Extra attempts if the replay raises. Default 2 (3 total).
@@ -222,19 +220,33 @@ class Abrasio:
         """
         from .utils.certificates import route_with_client_certificate
 
-        if not self._browser or not self._browser._playwright:
+        if not self._browser:
             raise AbrasioError("Browser not started. Call start() first.")
 
-        await route_with_client_certificate(
-            target,
-            url,
-            certificate,
-            playwright_instance=self._browser._playwright,
-            proxy=proxy,
-            timeout=timeout if timeout is not None else self.config.timeout / 1000,
-            retries=retries,
-            retry_backoff=retry_backoff,
-        )
+        _timeout = timeout if timeout is not None else self.config.timeout / 1000
+
+        if hasattr(self._browser, "relay_certificate_fetch"):
+            # Cloud mode: mTLS request runs server-side (in session's region).
+            _relay = self._browser.relay_certificate_fetch
+            await route_with_client_certificate(
+                target, url, certificate,
+                relay_fn=_relay,
+                timeout=_timeout,
+                retries=retries,
+                retry_backoff=retry_backoff,
+            )
+        else:
+            # Local mode: replay via local APIRequestContext.
+            if not self._browser._playwright:
+                raise AbrasioError("Browser not started. Call start() first.")
+            await route_with_client_certificate(
+                target, url, certificate,
+                playwright_instance=self._browser._playwright,
+                proxy=proxy,
+                timeout=_timeout,
+                retries=retries,
+                retry_backoff=retry_backoff,
+            )
 
     @property
     def live_view_url(self) -> Optional[str]:

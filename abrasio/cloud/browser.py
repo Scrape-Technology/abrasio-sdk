@@ -1,6 +1,6 @@
 """Cloud browser implementation using Abrasio API with Patchright."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 from urllib.parse import urlsplit
 import asyncio
 import ipaddress
@@ -235,6 +235,41 @@ class CloudBrowser:
             return contexts[0]
 
         return await self._browser.new_context(**kwargs)
+
+    async def relay_certificate_fetch(
+        self,
+        cert_pem: bytes,
+        key_pem: bytes,
+        origin: str,
+        method: str,
+        url: str,
+        headers: Dict[str, str],
+        body: Optional[bytes],
+        timeout: float,
+    ) -> Tuple[int, Dict[str, str], bytes]:
+        """
+        Execute an mTLS request via the Abrasio API relay endpoint.
+
+        The relay runs inside the Abrasio infrastructure (same region/proxy as the
+        browser session), so geo-restricted endpoints like certificado.sso.acesso.gov.br
+        are reachable without the client configuring a proxy.
+
+        Returns (status_code, response_headers, response_body).
+        Raises AbrasioError / SessionError on failure.
+        """
+        if not self._api_client or not self._session_id:
+            raise RuntimeError("Browser not started or session not active")
+        return await self._api_client.certificate_fetch(
+            session_id=self._session_id,
+            cert_pem=cert_pem,
+            key_pem=key_pem,
+            origin=origin,
+            method=method,
+            url=url,
+            headers=headers,
+            body=body,
+            timeout=timeout,
+        )
 
     async def new_page(self) -> Page:
         """

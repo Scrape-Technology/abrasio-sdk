@@ -1,6 +1,7 @@
 """HTTP client for Abrasio API."""
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
+import base64
 import logging
 import asyncio
 import uuid
@@ -250,6 +251,77 @@ class AbrasioAPIClient:
             f"Session {session_id} did not become ready within {timeout_seconds}s",
             timeout_seconds * 1000,
         )
+
+    async def certificate_fetch(
+        self,
+        session_id: str,
+        cert_pem: bytes,
+        key_pem: bytes,
+        origin: str,
+        method: str,
+        url: str,
+        headers: Dict[str, str],
+        body: Optional[bytes],
+        timeout: float,
+    ) -> Tuple[int, Dict[str, str], bytes]:
+        """
+        Execute an mTLS request via the session's certificate-fetch relay endpoint.
+
+        The Abrasio worker makes the request from within the session's region/proxy,
+        so geo-restricted endpoints are reachable without exposing any proxy config.
+
+        Request schema:
+            POST /v1/browser/session/{id}/certificate-fetch
+            {
+                "url": "https://...",
+                "method": "POST",
+                "headers": {...},
+                "body": "<base64>",            # optional
+                "timeout_ms": 60000,
+                "max_redirects": 0,
+                "certificate": {
+                    "origin": "https://...",
+                    "cert_pem": "<base64>",
+                    "key_pem": "<base64>"
+                }
+            }
+
+        Response schema:
+            {
+                "status": 302,
+                "headers": {"location": "...", ...},
+                "body": "<base64>"
+            }
+
+        Returns:
+            (status_code, response_headers, response_body_bytes)
+        """
+        payload: Dict[str, Any] = {
+            "url": url,
+            "method": method.upper(),
+            "headers": headers,
+            "timeout_ms": int(timeout * 1000),
+            "max_redirects": 0,
+            "certificate": {
+                "origin": origin,
+                "cert_pem": base64.b64encode(cert_pem).decode(),
+                "key_pem": base64.b64encode(key_pem).decode(),
+            },
+        }
+        if body:
+            payload["body"] = base64.b64encode(body).decode()
+
+        data = await self._request_with_retry(
+            "post",
+            f"/v1/browser/session/{session_id}/certificate-fetch",
+            json=payload,
+        )
+
+        status: int = data["status"]
+        resp_headers: Dict[str, str] = data.get("headers", {})
+        body_b64: str = data.get("body", "")
+        resp_body: bytes = base64.b64decode(body_b64) if body_b64 else b""
+        return status, resp_headers, resp_body
 
     async def finish_session(self, session_id: str) -> Dict[str, Any]:
         """
