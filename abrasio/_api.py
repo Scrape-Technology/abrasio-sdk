@@ -194,50 +194,46 @@ class Abrasio:
         timeout: Optional[float] = None,
         retries: int = 2,
         retry_backoff: float = 1.0,
-        impersonate: str = "chrome",
     ) -> None:
         """
-        Intercept `url` on `target` (a Page or BrowserContext) and replay it outside
-        the browser using a TLS client certificate, via curl_cffi (impersonating a real
-        browser's TLS/HTTP fingerprint).
+        Intercept `url` on `target` (a Page or BrowserContext) and replay it using
+        a TLS client certificate, entirely via Patchright's own `APIRequestContext`.
+        No external HTTP client dependencies (no curl_cffi, no httpx).
 
         Use this for sites requiring client-cert auth (e.g. ICP-Brasil logins on
         gov.br). Unlike `client_certificates` in `AbrasioConfig` (local mode only),
         this works in both local and cloud mode, since the interception always runs
         in the driver process regardless of where the browser itself runs.
 
+        The replay uses the same Patchright session, so passing `proxy` routes the
+        request through the same exit IP as the browser — required for geo-restricted
+        endpoints like Brazilian government services.
+
         Args:
             target: Page or BrowserContext to intercept requests on.
             url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
             certificate: A dict built with `abrasio.build_client_certificate(...)`.
-            proxy: Proxy to replay the request through. Defaults to None (direct
-                connection). Do NOT pass a residential proxy here — mTLS authentication
-                is guaranteed by the client certificate itself (not by exit IP), and
-                residential proxies commonly fail to tunnel mTLS CONNECT correctly,
-                causing 30s timeouts and `chrome-error://chromewebdata/`.
+            proxy: Proxy for the replay. Pass the same proxy as the browser session
+                to keep a consistent exit IP. Defaults to None (direct connection).
             timeout: Request timeout in seconds. Defaults to the session's configured
-                `timeout` (`AbrasioConfig.timeout`, in ms). Raise this if the replayed
-                request times out when going through a slow proxy — a timeout here
-                causes the page to land on a failed navigation
-                (`chrome-error://chromewebdata/`).
-            retries: Extra attempts after the first one if the replay raises (e.g. a flaky
-                proxy). Default 2 (3 attempts total) before aborting the route.
-            retry_backoff: Seconds to wait before each retry, multiplied by the attempt
-                number. Default 1.0.
-            impersonate: `curl_cffi` browser fingerprint to mimic for the replayed request
-                (e.g. "chrome"). Default "chrome".
+                `timeout` (`AbrasioConfig.timeout`, in ms).
+            retries: Extra attempts if the replay raises. Default 2 (3 total).
+            retry_backoff: Seconds to wait before each retry × attempt. Default 1.0.
         """
         from .utils.certificates import route_with_client_certificate
+
+        if not self._browser or not self._browser._playwright:
+            raise AbrasioError("Browser not started. Call start() first.")
 
         await route_with_client_certificate(
             target,
             url,
             certificate,
-            proxy=proxy,  # never inherit session proxy — residential proxies break mTLS
+            playwright_instance=self._browser._playwright,
+            proxy=proxy,
             timeout=timeout if timeout is not None else self.config.timeout / 1000,
             retries=retries,
             retry_backoff=retry_backoff,
-            impersonate=impersonate,
         )
 
     @property

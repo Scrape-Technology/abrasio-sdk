@@ -9,18 +9,15 @@ That native mechanism only works in **local mode** (it relies on a local SOCKS
 proxy the browser must dial back into, which requires the browser and the
 Playwright driver to be on the same machine). For **cloud mode** (remote
 browser), use `route_with_client_certificate` below instead: it intercepts the
-specific request via Playwright's `route()` API — which always executes in the
-driver process, regardless of where the browser runs — and replays it outside
-the browser using `curl_cffi`, which supports client certificates natively and
-can impersonate a real browser's TLS/HTTP fingerprint (requires the `tls` extra:
-`pip install abrasio[tls]`).
+specific request via Playwright's `route()` API and replays it using Patchright's
+own `APIRequestContext` — which handles TLS client certificates and proxy
+configuration natively, keeping the request fully inside the Patchright session.
 """
 
 import asyncio
 import logging
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 from .._exceptions import AbrasioError
 
@@ -93,95 +90,65 @@ def build_client_certificate(
     return entry
 
 
-def _write_temp(suffix: str, data: bytes) -> str:
-    """Write bytes to a private temp file and return its path."""
-    fd, path = tempfile.mkstemp(suffix=suffix, prefix="abrasio_cert_")
+def _pfx_to_pem_bytes(pfx_bytes: bytes, passphrase: Optional[str]) -> tuple:
+    """
+    Convert a PFX/PKCS12 bundle to (cert_pem, key_pem) bytes using Python's
+    `cryptography` library, which bundles its own OpenSSL with legacy-provider
+    support enabled. This handles ICP-Brasil certificates (RC2-40-CBC / 3DES
+    PKCS12 encryption) that Node.js 18+/OpenSSL 3 would reject outright.
+    """
     try:
-        with open(fd, "wb") as f:
-            f.write(data)
-    except Exception:
-        Path(path).unlink(missing_ok=True)
-        raise
-    return path
-
-
-def materialize_certificate(certificate: Dict[str, Any]) -> Tuple[str, str, Optional[str]]:
-    """
-    Normalize a `build_client_certificate()` entry into `(cert_path, key_path, passphrase)`
-    ready to pass as `httpx`'s `cert=` option.
-
-    PFX/PKCS12 entries are converted to PEM (requires the `cryptography` package — install
-    with `pip install abrasio[cert]`). `cert`/`key` bytes are written to private temp files;
-    `certPath`/`keyPath` are passed through unchanged.
-
-    Args:
-        certificate: A dict shaped like `build_client_certificate()`'s output.
-
-    Returns:
-        (cert_path, key_path, passphrase) for `httpx.AsyncClient(cert=...)`.
-
-    Raises:
-        AbrasioError: If the entry has neither a PEM pair nor a PFX, or `cryptography`
-            is missing when a PFX needs converting.
-    """
-    passphrase = certificate.get("passphrase")
-
-    pfx_path = certificate.get("pfxPath")
-    pfx = certificate.get("pfx")
-    if pfx_path or pfx:
-        try:
-            from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
-        except ImportError as e:
-            raise AbrasioError(
-                "Converting a PFX/PKCS12 certificate requires the 'cryptography' package. "
-                "Install with: pip install abrasio[cert]"
-            ) from e
-
-        pfx_bytes = pfx if pfx else Path(pfx_path).read_bytes()
-        pfx_password = passphrase.encode() if passphrase else None
-        private_key, cert_obj, _ = pkcs12.load_key_and_certificates(pfx_bytes, pfx_password)
-
-        cert_pem = cert_obj.public_bytes(Encoding.PEM)
-        key_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
-
-        return _write_temp(".pem", cert_pem), _write_temp(".key", key_pem), None
-
-    cert_path = certificate.get("certPath")
-    cert_bytes = certificate.get("cert")
-    key_path = certificate.get("keyPath")
-    key_bytes = certificate.get("key")
-
-    if not (cert_path or cert_bytes) or not (key_path or key_bytes):
-        raise AbrasioError(
-            "materialize_certificate requires either certPath/cert + keyPath/key (PEM), or "
-            "pfxPath/pfx (PFX/PKCS12)."
+        from cryptography.hazmat.primitives.serialization import (
+            pkcs12, Encoding, PrivateFormat, NoEncryption,
         )
-
-    resolved_cert_path = str(cert_path) if cert_path else _write_temp(".pem", cert_bytes)
-    resolved_key_path = str(key_path) if key_path else _write_temp(".key", key_bytes)
-
-    return resolved_cert_path, resolved_key_path, passphrase
-
-
-def _decrypt_pem_key(key_path: str, passphrase: str) -> str:
-    """
-    Re-write an encrypted PEM private key as an unencrypted one and return its path.
-
-    curl_cffi's `cert` option only accepts a plain (cert, key) file pair — no passphrase —
-    so an encrypted PEM key needs to be decrypted up front, same as PFX keys already are
-    in `materialize_certificate()`.
-    """
-    try:
-        from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
     except ImportError as e:
         raise AbrasioError(
-            "Using a passphrase-protected PEM key requires the 'cryptography' package. "
+            "Converting a PFX/PKCS12 certificate requires the 'cryptography' package. "
             "Install with: pip install abrasio[cert]"
         ) from e
 
-    private_key = load_pem_private_key(Path(key_path).read_bytes(), password=passphrase.encode())
+    pfx_password = passphrase.encode() if passphrase else None
+    private_key, cert_obj, _ = pkcs12.load_key_and_certificates(pfx_bytes, pfx_password)
+    cert_pem = cert_obj.public_bytes(Encoding.PEM)
     key_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
-    return _write_temp(".key", key_pem)
+    return cert_pem, key_pem
+
+
+def _normalize_cert_for_patchright(certificate: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    If the certificate is PFX/PKCS12, convert to PEM before passing to Playwright's
+    APIRequestContext. Playwright's Node.js subprocess uses OpenSSL 3, which rejects
+    legacy-encrypted PFX bundles (RC2-40-CBC / 3DES — common in ICP-Brasil certs)
+    with 'Unsupported TLS certificate'. Python's cryptography library handles these
+    legacy formats and produces a plain PEM cert+key that Node.js accepts.
+    """
+    pfx = certificate.get("pfx")
+    pfx_path = certificate.get("pfxPath")
+    if not pfx and not pfx_path:
+        return certificate  # Already PEM — pass through unchanged.
+
+    pfx_bytes = pfx if pfx else Path(pfx_path).read_bytes()
+    cert_pem, key_pem = _pfx_to_pem_bytes(pfx_bytes, certificate.get("passphrase"))
+    return {
+        "origin": certificate["origin"],
+        "cert": cert_pem,
+        "key": key_pem,
+        # key is already unencrypted after conversion — no passphrase needed.
+    }
+
+
+def _patchright_proxy(proxy: Optional[Union[str, Dict[str, str]]]) -> Optional[Dict[str, str]]:
+    """Convert proxy config (string or dict) to Playwright's proxy dict format."""
+    if not proxy:
+        return None
+    if isinstance(proxy, dict):
+        result = dict(proxy)
+        server = result.get("server", "")
+        if server and "://" not in server:
+            result["server"] = "http://" + server
+        return result
+    server = proxy if "://" in proxy else f"http://{proxy}"
+    return {"server": server}
 
 
 async def route_with_client_certificate(
@@ -189,59 +156,72 @@ async def route_with_client_certificate(
     url: Union[str, Any],
     certificate: Dict[str, Any],
     *,
+    playwright_instance: Any,
     proxy: Optional[Union[str, Dict[str, str]]] = None,
     timeout: float = 30.0,
     retries: int = 2,
     retry_backoff: float = 1.0,
-    impersonate: str = "chrome",
 ) -> None:
     """
-    Intercept `url` on `target` (a Patchright `Page` or `BrowserContext`) and replay it
-    outside the browser using the given client certificate, via `curl_cffi`. Requires the
-    `tls` extra: `pip install abrasio[tls]`.
+    Intercept `url` on `target` (a Patchright `Page` or `BrowserContext`) and replay
+    it using the given client certificate, entirely within Patchright's own
+    `APIRequestContext` — no external HTTP client dependencies (no curl_cffi, no httpx).
 
-    This works in both local and cloud mode, unlike Playwright's native
-    `client_certificates` option (local mode only) — the route handler always executes in
-    the driver process, regardless of where the browser itself runs.
+    Creates a `playwright_instance.request.new_context(client_certificates=[certificate])`
+    to handle TLS client authentication natively, supporting PEM cert/key pairs,
+    PFX/PKCS12 bundles, and passphrases. The proxy option routes the replay through the
+    same proxy as the browser session, keeping a consistent exit IP and ensuring
+    geo-restricted endpoints (e.g. certificado.sso.acesso.gov.br) are reachable.
 
-    Uses `curl_cffi` (not `httpx`) so the replayed request's TLS/HTTP fingerprint matches
-    a real Chrome (`impersonate`), instead of Python's default OpenSSL fingerprint — sites
-    with anti-fraud/WAF checks in front of sensitive mTLS endpoints (e.g. ICP-Brasil logins
-    on gov.br) can otherwise flag the mismatch between the browser's own fingerprint and a
-    plain-Python client replaying one of its requests.
+    This works in both local and cloud mode — the route handler and the
+    `APIRequestContext` always execute in the driver process, regardless of where
+    the browser itself runs.
 
     Args:
         target: `Page` or `BrowserContext` to intercept requests on.
         url: URL/glob pattern to intercept, as accepted by Playwright's `route()`.
         certificate: A dict shaped like `build_client_certificate()`'s output.
-        proxy: Proxy to replay the request through (string or `{"server","username","password"}`).
-            Should match the browser session's proxy to keep a consistent exit IP.
-        timeout: Request timeout in seconds. Defaults to 30s, since a timeout here aborts
-            the route and leaves the page on a failed navigation (`chrome-error://chromewebdata/`).
-        retries: Extra attempts after the first one if the replay raises (connection/timeout/
-            proxy/SSL errors from a flaky proxy). Default 2 (3 attempts total). Does not retry
-            on HTTP error responses (4xx/5xx) — only on request exceptions, since those are the
-            ones that abort the route instead of returning a real response to the page.
-        retry_backoff: Seconds to wait before each retry, multiplied by the attempt number
-            (1st retry waits `retry_backoff`, 2nd waits `2 * retry_backoff`, ...). Default 1.0.
-        impersonate: `curl_cffi` browser fingerprint to mimic. Default "chrome". Pass None
-            to disable impersonation (plain curl TLS fingerprint).
+        playwright_instance: The active Playwright instance (`async_playwright().start()`).
+            Used to create the `APIRequestContext`. Accessible via `self._browser._playwright`
+            inside the `Abrasio` class.
+        proxy: Proxy for the replayed request. Pass the same proxy as the browser
+            session so the request exits from the same IP (required for geo-restricted
+            endpoints like Brazilian government services).
+        timeout: Request timeout in seconds. Defaults to 30s.
+        retries: Extra attempts if the replay raises (connection/timeout errors).
+            Default 2 (3 attempts total). Does not retry on HTTP error responses.
+        retry_backoff: Seconds to wait before each retry × attempt number. Default 1.0.
     """
-    try:
-        from curl_cffi.requests import AsyncSession
-    except ImportError as e:
-        raise AbrasioError(
-            "route_with_client_certificate requires the 'curl_cffi' package. "
-            "Install with: pip install abrasio[tls]"
-        ) from e
+    # Playwright only presents the client cert when the request's origin matches
+    # the certificate's `origin` field exactly. If the route URL is a different
+    # subdomain from the one used in build_client_certificate (e.g. cert origin
+    # is "https://login.esocial.gov.br" but the form posts to
+    # "https://certificado.sso.acesso.gov.br"), the cert is silently omitted and
+    # the server closes the connection with ECONNRESET.
+    # Auto-correct: extract the origin from the route URL and override.
+    # Convert PFX → PEM if needed (handles legacy ICP-Brasil PKCS12 encryption
+    # that Node.js/OpenSSL 3 rejects with "Unsupported TLS certificate").
+    _cert = _normalize_cert_for_patchright(certificate)
 
-    cert_path, key_path, passphrase = materialize_certificate(certificate)
-    if passphrase:
-        key_path = _decrypt_pem_key(key_path, passphrase)
-    cert = (cert_path, key_path)
-    cffi_proxy = _normalize_proxy(proxy)
+    # Playwright only presents the client cert when the request's origin matches
+    # the certificate's `origin` field exactly. Auto-correct from the route URL
+    # to avoid ECONNRESET when the cert origin differs from the POST destination.
+    if isinstance(url, str) and url.startswith("http"):
+        from urllib.parse import urlparse as _urlparse
+        _parsed = _urlparse(url)
+        _origin = f"{_parsed.scheme}://{_parsed.netloc}"
+        if _origin and _cert.get("origin") != _origin:
+            logger.debug(
+                f"Certificate origin overridden: {_cert.get('origin')!r} → {_origin!r} "
+                f"(derived from route URL)"
+            )
+            _cert = {**_cert, "origin": _origin}
 
-    client = AsyncSession()
+    request_context = await playwright_instance.request.new_context(
+        client_certificates=[_cert],
+        proxy=_patchright_proxy(proxy),
+        ignore_https_errors=False,
+    )
 
     async def _handler(route: Any) -> None:
         request = route.request
@@ -253,23 +233,16 @@ async def route_with_client_certificate(
         last_exc: Optional[Exception] = None
         for attempt in range(retries + 1):
             try:
-                resp = await client.request(
+                response = await request_context.fetch(
+                    request.url,
                     method=request.method,
-                    url=request.url,
                     headers=headers,
                     data=request.post_data_buffer,
-                    allow_redirects=False,
-                    cert=cert,
-                    proxy=cffi_proxy,
-                    verify=True,
-                    timeout=timeout,
-                    impersonate=impersonate,
+                    timeout=timeout * 1000,
+                    fail_on_status_code=False,
+                    max_redirects=0,
                 )
-                await route.fulfill(
-                    status=resp.status_code,
-                    headers=dict(resp.headers),
-                    body=resp.content,
-                )
+                await route.fulfill(response=response)
                 return
             except Exception as e:
                 last_exc = e
@@ -286,10 +259,6 @@ async def route_with_client_certificate(
             f"{retries + 1} attempt(s): {last_exc!r}",
             exc_info=last_exc,
         )
-        # Fulfill with 502 instead of aborting — route.abort() causes the browser
-        # to navigate to chrome-error://chromewebdata/, which is indistinguishable
-        # from a real navigation and breaks URL-based error detection in callers.
-        # A 502 response keeps the page on a normal HTTP error that callers can handle.
         error_body = (
             f"[abrasio] Certificate route replay failed after {retries + 1} "
             f"attempt(s): {last_exc!r}"
@@ -301,21 +270,3 @@ async def route_with_client_certificate(
         )
 
     await target.route(url, _handler)
-
-
-def _normalize_proxy(proxy: Optional[Union[str, Dict[str, str]]]) -> Optional[str]:
-    """Normalize Abrasio's proxy config (str or dict) into an httpx proxy URL."""
-    if not proxy:
-        return None
-    if isinstance(proxy, str):
-        return proxy if "://" in proxy else f"http://{proxy}"
-
-    server = proxy.get("server", "")
-    if "://" not in server:
-        server = f"http://{server}"
-    username = proxy.get("username")
-    password = proxy.get("password")
-    if username and password:
-        scheme, _, rest = server.partition("://")
-        return f"{scheme}://{username}:{password}@{rest}"
-    return server
