@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Tuple
 import base64
 import logging
 import asyncio
+import time
 import uuid
 
 import httpx
@@ -226,10 +227,27 @@ class AbrasioAPIClient:
             TimeoutError: Session didn't become ready in time
             SessionError: Session failed
         """
-        elapsed = 0
+        # Bug fix: this used to track "elapsed" by counting loop iterations
+        # (`elapsed += poll_interval`) rather than real time. get_session()
+        # has its own retry-with-backoff (up to ~3 retries, tens of seconds
+        # each on 429/502/503/504), so a single slow iteration could burn far
+        # more than poll_interval seconds while only ever counting as one —
+        # letting the real wait balloon to many times timeout_seconds, or
+        # never time out at all under sustained API flakiness. Track real
+        # wall-clock time instead, and bound each get_session() call to
+        # whatever time remains so the total can't overrun the budget either.
+        deadline = time.monotonic() + timeout_seconds
 
-        while elapsed < timeout_seconds:
-            session = await self.get_session(session_id)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+
+            try:
+                session = await asyncio.wait_for(self.get_session(session_id), timeout=remaining)
+            except asyncio.TimeoutError:
+                break
+
             status = session.get("status")
 
             if status == "READY":
@@ -244,8 +262,10 @@ class AbrasioAPIClient:
                 raise SessionError("Session already finished", session_id)
 
             logger.debug(f"Session {session_id} status: {status}, waiting...")
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(poll_interval, remaining))
 
         raise TimeoutError(
             f"Session {session_id} did not become ready within {timeout_seconds}s",
