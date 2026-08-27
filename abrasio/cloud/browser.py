@@ -271,6 +271,18 @@ class CloudBrowser:
             timeout=timeout,
         )
 
+    async def get_artifacts(self) -> Any:
+        """
+        List files downloaded by the browser during this session, each with
+        a presigned S3 URL to fetch the bytes directly.
+
+        Returns:
+            List of {filename, size, download_url, created_at}
+        """
+        if not self._api_client or not self._session_id:
+            raise RuntimeError("Browser not started or session not active")
+        return await self._api_client.get_session_artifacts(self._session_id)
+
     async def new_page(self) -> Page:
         """
         Create a new page.

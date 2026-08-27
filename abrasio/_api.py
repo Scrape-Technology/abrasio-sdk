@@ -248,6 +248,18 @@ class Abrasio:
                 retry_backoff=retry_backoff,
             )
 
+    async def get_artifacts(self):
+        """
+        List files downloaded by the browser during this session (cloud mode only),
+        each with a presigned S3 URL valid for ~1h.
+
+        Returns:
+            List of {filename, size, download_url, created_at}
+        """
+        if not self._browser or not hasattr(self._browser, "get_artifacts"):
+            raise AbrasioError("get_artifacts() is only available in cloud mode.")
+        return await self._browser.get_artifacts()
+
     @property
     def live_view_url(self) -> Optional[str]:
         """Get the live view URL for real-time browser streaming (cloud mode only)."""

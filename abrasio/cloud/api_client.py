@@ -352,6 +352,26 @@ class AbrasioAPIClient:
         """
         return await self._request_with_retry("post", f"/v1/browser/session/{session_id}/finish")
 
+    async def get_session_artifacts(self, session_id: str) -> Any:
+        """
+        List files downloaded by the browser during this session.
+
+        Each entry has a presigned S3 URL (valid ~1h) the caller can fetch
+        directly — no further Abrasio API calls needed to get the bytes.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            List of {filename, size, download_url, created_at}
+
+        Raises:
+            SessionError: Session not found or not owned by this API key
+        """
+        return await self._request_with_retry(
+            "get", f"/v1/browser/session/{session_id}/artifacts"
+        )
+
     def _handle_response(self, response: httpx.Response) -> Dict[str, Any]:
         """Handle API response and raise appropriate exceptions."""
         if response.status_code == 200:
