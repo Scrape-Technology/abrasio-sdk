@@ -75,6 +75,11 @@ class CloudBrowser:
         self._session_id: Optional[str] = None
         self._ws_endpoint: Optional[str] = None
         self._live_view_url: Optional[str] = None
+        # Contexts (by id()) that already have block_resources' route() applied —
+        # a cloud session's context is created lazily (see new_page/new_context),
+        # not necessarily during start(), so this must be applied wherever a
+        # context first comes into existence, exactly once per context.
+        self._resource_blocked_context_ids: set = set()
 
     @property
     def browser(self) -> Browser:
@@ -115,6 +120,7 @@ class CloudBrowser:
                 device=self.config.device,
                 mobile_model=self.config.mobile_model,
                 proxy=self.config.proxy,  # Override profile's stored proxy (if provided)
+                hard=self.config.hard,
             )
 
             self._session_id = session_data.get("id")
@@ -148,16 +154,19 @@ class CloudBrowser:
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.connect_over_cdp(self._ws_endpoint)
 
+            contexts = self._browser.contexts
+
             # Humanize all page interactions if requested
-            if self.config.humanize:
+            if self.config.humanize and contexts:
                 from ..human.actions import humanize_context
-                contexts = self._browser.contexts
-                if contexts:
-                    await humanize_context(
-                        contexts[0],
-                        headless=self.config.headless,
-                        speed_factor=self.config.humanize_speed,
-                    )
+                await humanize_context(
+                    contexts[0],
+                    headless=self.config.headless,
+                    speed_factor=self.config.humanize_speed,
+                )
+
+            if contexts:
+                await self._apply_resource_blocking_once(contexts[0])
 
             logger.info("Connected to cloud browser")
         except Exception:
@@ -212,6 +221,19 @@ class CloudBrowser:
         self._session_id = None
         self._ws_endpoint = None
 
+    async def _apply_resource_blocking_once(self, context: BrowserContext) -> None:
+        """Idempotent: apply_resource_blocking() registers a route() handler,
+        so calling it twice on the same context would register two handlers
+        and double-resolve routes (Playwright errors on that)."""
+        if not self.config.block_resources:
+            return
+        cid = id(context)
+        if cid in self._resource_blocked_context_ids:
+            return
+        self._resource_blocked_context_ids.add(cid)
+        from .._resource_blocking import apply_resource_blocking
+        await apply_resource_blocking(context, self.config.block_resources)
+
     async def new_context(self, **kwargs) -> BrowserContext:
         """
         Create a new browser context.
@@ -231,10 +253,9 @@ class CloudBrowser:
         # For cloud browsers, we typically use the default context
         # that's pre-configured with the fingerprint
         contexts = self._browser.contexts
-        if contexts:
-            return contexts[0]
-
-        return await self._browser.new_context(**kwargs)
+        context = contexts[0] if contexts else await self._browser.new_context(**kwargs)
+        await self._apply_resource_blocking_once(context)
+        return context
 
     async def relay_certificate_fetch(
         self,
@@ -299,6 +320,8 @@ class CloudBrowser:
             context = contexts[0]
         else:
             context = await self._browser.new_context()
+
+        await self._apply_resource_blocking_once(context)
 
         page = await context.new_page()
         return page

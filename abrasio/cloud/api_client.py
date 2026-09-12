@@ -141,6 +141,7 @@ class AbrasioAPIClient:
         device: str = "desktop",
         mobile_model: Optional[str] = None,
         proxy: Optional[Any] = None,
+        hard: bool = False,
     ) -> Dict[str, Any]:
         """
         Create a new browser session.
@@ -154,6 +155,9 @@ class AbrasioAPIClient:
             proxy: Proxy override — string "http://host:port" or dict
                    {"server": "...", "username": "...", "password": "..."}.
                    Overrides the proxy stored in the selected profile's meta.json.
+            hard: Route to the home-server worker pool, reserved for the
+                  hardest anti-bot targets (e.g. Shopee) that the normal
+                  cloud fleet can't pass. Default: False.
 
         Returns:
             Session data including session_id
@@ -176,6 +180,8 @@ class AbrasioAPIClient:
             payload["device"] = device
         if mobile_model:
             payload["mobile_model"] = mobile_model
+        if hard:
+            payload["hard"] = hard
         if proxy:
             if isinstance(proxy, dict):
                 proxy_normalized = dict(proxy)

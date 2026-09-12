@@ -178,6 +178,10 @@ class StealthBrowser:
                 speed_factor=self.config.humanize_speed,
             )
 
+        if self.config.block_resources:
+            from .._resource_blocking import apply_resource_blocking
+            await apply_resource_blocking(self._context, self.config.block_resources)
+
         logger.info(f"Patchright browser started (headless={self.config.headless})")
         logger.debug(f"User data dir: {self._user_data_dir}")
         logger.debug(f"Launch args: {args}")

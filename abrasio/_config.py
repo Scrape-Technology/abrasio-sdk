@@ -65,6 +65,14 @@ class AbrasioConfig:
         user_data_dir: Persistent profile directory for local mode
         region: Target region for geo-targeting (e.g., "BR", "US"). Auto-configures locale/timezone.
         profile_id: Persistent profile ID for cloud mode
+        hard: Route to the home-server worker pool, reserved for the hardest
+            anti-bot targets (e.g. Shopee) that the normal cloud fleet can't
+            pass. Cloud mode only. Default: False.
+        block_resources: Playwright resource types to abort on every request
+            (e.g. ["image", "media", "font"]) — cuts bytes_consumed for pages
+            where those assets aren't needed. Applied client-side via
+            context.route() before any request reaches the network, so it
+            reduces billed bytes in both local and cloud mode.
         auto_configure_region: Auto-configure locale/timezone from region/IP (default: True)
         extra_args: Extra browser launch arguments
         humanize: Humanize all browser interactions (mouse, keyboard, scroll). Default: False.
@@ -101,6 +109,8 @@ class AbrasioConfig:
     profile_id: Optional[str] = None
     device: str = "desktop"          # "desktop" | "mobile"
     mobile_model: Optional[str] = None  # e.g. "pixel-8", "iphone-15" (used when device="mobile")
+    hard: bool = False  # Route to the home-server worker pool (hardest anti-bot targets only, e.g. Shopee)
+    block_resources: Optional[List[str]] = None  # e.g. ["image", "media", "font"] — abort these Playwright resource types to cut bytes_consumed
 
     # Region auto-configuration
     auto_configure_region: bool = True  # Auto-configure locale/timezone from region
