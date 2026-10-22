@@ -14,6 +14,43 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("abrasio.local")
 
+
+def _chrome_major(default: int = 131) -> int:
+    """Major version of the installed Chrome (the one `channel="chrome"` launches).
+
+    The UA must match the real binary, or `userAgentData`/`sec-ch-ua` contradict it.
+    Falls back to the Chromium version Patchright bundles, then to `default`.
+    """
+    import json
+    import re
+    import subprocess
+    import sys
+    from importlib.util import find_spec
+    from pathlib import Path
+
+    try:
+        if sys.platform == "win32":
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Google\Chrome\BLBeacon") as k:
+                return int(winreg.QueryValueEx(k, "version")[0].split(".")[0])
+        for exe in ("google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"):
+            try:
+                out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=5).stdout
+                return int(re.search(r"(\d+)\.", out).group(1))
+            except (OSError, AttributeError, subprocess.SubprocessError):
+                continue
+    except Exception:
+        pass
+    try:
+        path = Path(find_spec("patchright").origin).parent / "driver" / "package" / "browsers.json"
+        for br in json.loads(path.read_bytes())["browsers"]:
+            if br["name"] == "chromium":
+                return int(br["browserVersion"].split(".")[0])
+    except Exception:
+        pass
+    return default
+
+
 # Canvas noise: adds subtle random noise to canvas pixel data reads.
 # This makes the canvas fingerprint unique per session without breaking functionality.
 _CANVAS_NOISE_SCRIPT = """
@@ -151,6 +188,8 @@ class StealthBrowser:
             # Setting viewport can be detected as automation
             no_viewport=not self.config.viewport,
             viewport=self.config.viewport if self.config.viewport else None,
+            # Dark scheme passes creepjs' prefersLightColor check
+            color_scheme="dark",
             # Locale and timezone (these are safe to set)
             #locale=self.config.locale,
             #timezone_id=self.config.timezone,
@@ -177,6 +216,10 @@ class StealthBrowser:
                 headless=self.config.headless,
                 speed_factor=self.config.humanize_speed,
             )
+
+        if self.config.solve_cloudflare:
+            from ..utils.cloudflare import solve_cloudflare_context
+            await solve_cloudflare_context(self._context)
 
         if self.config.block_resources:
             from .._resource_blocking import apply_resource_blocking
@@ -273,9 +316,22 @@ class StealthBrowser:
             "--disable-component-update",
             "--disable-default-apps",
 
-            # Window size (realistic desktop)
-            #"--window-size=1920,1080",
+            # Window size (realistic desktop); maximized also helps pass headless checks
+            "--start-maximized",
+            "--window-position=0,0",
+
+            # Report a desktop mouse (hover + fine pointer) — headless defaults look like touch
+            "--blink-settings=primaryHoverType=2,availableHoverTypes=2,"
+            "primaryPointerType=4,availablePointerTypes=4",
         ]
+
+        # Set the language browser-wide: the context `locale` option only patches the main
+        # thread, so workers/Intl/Accept-Language would keep the real language (WAFs flag it).
+        locale = self.config.locale
+        if locale:
+            base = locale.split("-")[0].lower()
+            accept = f"{locale},{base}" if base != locale.lower() else locale
+            args += [f"--lang={locale}", f"--accept-lang={accept}"]
 
         # Fix User-Agent in headless mode: Chrome adds "HeadlessChrome" which is detectable
         # We replace it with the normal Chrome UA to avoid detection
@@ -287,26 +343,27 @@ class StealthBrowser:
 
             # Detect OS and build appropriate User-Agent
             system = platform.system()
+            chrome_major = _chrome_major()
             if system == "Windows":
                 # Windows 10/11 User-Agent
                 user_agent = (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
+                    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    f"AppleWebKit/537.36 (KHTML, like Gecko) "
+                    f"Chrome/{chrome_major}.0.0.0 Safari/537.36"
                 )
             elif system == "Darwin":
                 # macOS User-Agent
                 user_agent = (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
+                    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    f"AppleWebKit/537.36 (KHTML, like Gecko) "
+                    f"Chrome/{chrome_major}.0.0.0 Safari/537.36"
                 )
             else:
                 # Linux User-Agent
                 user_agent = (
-                    "Mozilla/5.0 (X11; Linux x86_64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
+                    f"Mozilla/5.0 (X11; Linux x86_64) "
+                    f"AppleWebKit/537.36 (KHTML, like Gecko) "
+                    f"Chrome/{chrome_major}.0.0.0 Safari/537.36"
                 )
 
             args.append(f"--user-agent={user_agent}")

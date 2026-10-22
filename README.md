@@ -32,6 +32,9 @@
 | WebRTC IP leak protection | Implemented | Via `FingerprintConfig(webrtc=False)` |
 | WebGL control | Implemented | Enabled by default, disable via config |
 | Timezone/Locale consistency | Auto-validated | Auto-configures from region or IP |
+| Cloudflare Turnstile | Implemented | `Abrasio(solve_cloudflare=True)` or `solve_cloudflare(page)` |
+| Browser-wide language | Implemented | `--lang`/`--accept-lang` from `locale` (workers/Intl consistent) |
+| Headless UA version | Implemented | Matches installed Chrome major version |
 | Retry on rate limit | Implemented | Exponential backoff with Retry-After |
 
 ## Table of Contents
@@ -39,6 +42,7 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [FingerprintConfig](#fingerprintconfig)
+- [Cloudflare Turnstile](#cloudflare-turnstile)
 - [Human-Like Behavior](#human-like-behavior)
 - [TLS Fingerprinting (HTTP)](#tls-fingerprinting-http)
 - [Configuration](#configuration)
@@ -150,6 +154,24 @@ async with Abrasio(
 | `audio_noise` | `False` | Add noise to AudioContext reads. Randomizes fingerprint. |
 
 > **Cloud mode**: `FingerprintConfig` is completely ignored. The cloud browser uses real collected fingerprints 
+
+## Cloudflare Turnstile
+
+```python
+from abrasio import Abrasio, solve_cloudflare
+
+# Automatic: solved after every page.goto()
+async with Abrasio(solve_cloudflare=True) as browser:
+    page = await browser.new_page()
+    await page.goto("https://site-behind-cloudflare.com")
+
+# Manual: e.g. challenge shown after a click
+ok = await solve_cloudflare(page)  # True = page is clear
+```
+
+Covers Turnstile (managed, interactive, non-interactive, embedded). reCAPTCHA/hCaptcha are not
+solved. Details: [docs/cloudflare.md](docs/cloudflare.md). Approach adapted from
+[Scrapling](https://github.com/D4Vinci/Scrapling) (BSD-3-Clause).
 
 ## Human-Like Behavior
 

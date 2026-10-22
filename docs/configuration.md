@@ -164,6 +164,7 @@ config = AbrasioConfig(
 | `stealth` | `bool` | `True` | Enable stealth mode |
 | `extra_args` | `list[str]` | `[]` | Additional Chrome launch arguments |
 | `debug` | `bool` | `False` | Enable debug logging |
+| `solve_cloudflare` | `bool` | `False` | Auto-solve Cloudflare Turnstile after every `page.goto()`. See [Cloudflare](cloudflare.md) |
 
 ```python
 # With extra Chrome arguments
@@ -177,6 +178,19 @@ config = AbrasioConfig(
 # Debug mode
 config = AbrasioConfig(debug=True)
 ```
+
+### Local launch details
+
+In local mode the SDK sets these automatically to look like a regular desktop Chrome:
+
+- **Language by flag:** `locale` is passed as `--lang` / `--accept-lang`, so workers, `Intl` and
+  `Accept-Language` all agree (the context `locale` option only patches the main thread).
+- **Headless User-Agent:** `HeadlessChrome` is replaced by `Chrome/<major>`, where `<major>` is
+  the version of the installed Chrome (Windows registry or `google-chrome --version`), falling
+  back to the Chromium version bundled with Patchright.
+- **Desktop signals:** `color_scheme="dark"` (passes creepjs' `prefersLightColor` check),
+  `--start-maximized`, `--window-position=0,0` and `--blink-settings` (hover + fine pointer).
+- **Canvas noise** stays off by default: Google reCAPTCHA detects it.
 
 ### Deprecated Options
 

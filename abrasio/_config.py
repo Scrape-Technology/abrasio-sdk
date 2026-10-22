@@ -77,6 +77,7 @@ class AbrasioConfig:
         extra_args: Extra browser launch arguments
         humanize: Humanize all browser interactions (mouse, keyboard, scroll). Default: False.
         humanize_speed: Speed multiplier for humanized interactions (1.0 = normal). Default: 1.0.
+        solve_cloudflare: Auto-solve Cloudflare Turnstile challenges after every page.goto(). Default: False.
         client_certificates: TLS client certificates for sites requiring client-cert auth
             (e.g. ICP-Brasil logins on gov.br). Build entries with
             `abrasio.build_client_certificate(...)`. **Local mode only** — Playwright applies
@@ -130,6 +131,9 @@ class AbrasioConfig:
     # Humanization
     humanize: bool = False
     humanize_speed: float = 1.0
+
+    # Cloudflare Turnstile auto-solve (see abrasio.utils.cloudflare)
+    solve_cloudflare: bool = False
 
     # Internal: stores validation warnings
     _region_warnings: List[str] = field(default_factory=list, repr=False)

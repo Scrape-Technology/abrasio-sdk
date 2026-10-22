@@ -9,6 +9,7 @@ Welcome to the Abrasio SDK documentation.
 | [Getting Started](getting-started.md) | Installation and first steps |
 | [Configuration](configuration.md) | All configuration options |
 | [Fingerprint Config](fingerprint.md) | FingerprintConfig and browser fingerprinting |
+| [Cloudflare](cloudflare.md) | Cloudflare Turnstile auto-solve |
 | [Human Behavior](human-behavior.md) | Mouse, typing, scrolling simulation |
 | [Cloud Mode](cloud-mode.md) | Using cloud browser infrastructure |
 | [API Reference](api-reference.md) | Complete API documentation |
@@ -18,6 +19,7 @@ Welcome to the Abrasio SDK documentation.
 Abrasio SDK is an undetected web scraping library powered by [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with:
 
 - **Anti-Detection**: Bypasses Runtime.enable, CDP detection, and navigator.webdriver
+- **Cloudflare Turnstile**: `solve_cloudflare=True` solves challenges automatically (local and cloud)
 - **Human Behavior**: Bezier curve mouse movements, natural typing, smooth scrolling
 - **FingerprintConfig**: Control WebGL, WebRTC, canvas/audio noise per session (local mode)
 - **TLS Fingerprinting**: curl_cffi for JA3/JA4 matching on HTTP requests

@@ -40,6 +40,7 @@ Usage:
 from ._api import Abrasio
 from ._config import AbrasioConfig, FingerprintConfig
 from .utils.certificates import build_client_certificate
+from .utils.cloudflare import solve_cloudflare
 from ._exceptions import (
     AbrasioError,
     AuthenticationError,
@@ -57,6 +58,7 @@ __all__ = [
     "AbrasioConfig",
     "FingerprintConfig",
     "build_client_certificate",
+    "solve_cloudflare",
     "AbrasioError",
     "AuthenticationError",
     "SessionError",

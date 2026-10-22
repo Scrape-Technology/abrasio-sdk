@@ -225,12 +225,15 @@ class CloudBrowser:
         """Idempotent: apply_resource_blocking() registers a route() handler,
         so calling it twice on the same context would register two handlers
         and double-resolve routes (Playwright errors on that)."""
-        if not self.config.block_resources:
-            return
         cid = id(context)
         if cid in self._resource_blocked_context_ids:
             return
         self._resource_blocked_context_ids.add(cid)
+        if self.config.solve_cloudflare:
+            from ..utils.cloudflare import solve_cloudflare_context
+            await solve_cloudflare_context(context)
+        if not self.config.block_resources:
+            return
         from .._resource_blocking import apply_resource_blocking
         await apply_resource_blocking(context, self.config.block_resources)
 

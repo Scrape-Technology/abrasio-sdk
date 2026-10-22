@@ -138,6 +138,17 @@ class AbrasioConfig:
         """Convert config to dictionary."""
 ```
 
+### solve_cloudflare()
+
+```python
+async def solve_cloudflare(page: Page, *, max_attempts: int = 3) -> bool
+```
+
+Solves a Cloudflare Turnstile/interstitial challenge on `page`. Returns `True` when the page is
+clear (or had no challenge). See [Cloudflare](cloudflare.md).
+
+`AbrasioConfig(solve_cloudflare=True)` runs it automatically after every `page.goto()`.
+
 ### FingerprintConfig
 
 Fingerprint protection settings (local mode only).
