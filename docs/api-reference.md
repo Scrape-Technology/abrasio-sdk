@@ -124,7 +124,7 @@ class AbrasioConfig:
 
     @property
     def is_cloud_mode(self) -> bool:
-        """Check if running in cloud mode (has API key starting with 'sk_')."""
+        """Check if running in cloud mode (has API key starting with 'abr_')."""
 
     @property
     def is_local_mode(self) -> bool:
@@ -403,7 +403,7 @@ class StealthClient:
 
 ## Sync API
 
-Synchronous wrapper for the async API. Compatible with Python 3.8+ including 3.10+.
+Synchronous wrapper for the async API. Requires Python 3.10+.
 
 ```python
 from abrasio.sync_api import Abrasio

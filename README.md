@@ -1,16 +1,24 @@
 # Abrasio SDK
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Version 0.1.6](https://img.shields.io/badge/version-0.1.6-blue.svg)]()
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/abrasio.svg)](https://pypi.org/project/abrasio/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-**Undetected web scraping SDK** inspired on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with human-like behavior simulation and optional cloud browser support.
+**Stealth browser SDK for web scraping**, built on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright), with human-like behavior simulation and optional managed cloud browsers.
+
+```bash
+pip install abrasio
+patchright install chrome
+```
+
+**Local mode is free and needs no API key.** For cloud mode (managed browsers with real fingerprints and persistent profiles), get a key (`abr_live_...`) at [scrapetechnology.com/abrasio/register](https://scrapetechnology.com/abrasio/register). Docs: [scrapetechnology.com/abrasio/docs](https://scrapetechnology.com/abrasio/docs).
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Undetected** | Patchright bypasses Runtime.enable and CDP detection |
-| **Free Local Mode** | Run on your machine with anti-detection patches |
+| **Stealth** | Patchright avoids the `Runtime.enable` / CDP leaks of stock Playwright |
+| **Free Local Mode** | Run on your machine with stealth patches |
 | **Cloud Mode** | Real fingerprints(paid) |
 | **Human Behavior** | Bezier mouse movements, natural typing, smooth scrolling |
 | **TLS Fingerprinting** | curl_cffi for JA3/JA4 TLS fingerprint matching |
@@ -18,7 +26,7 @@
 | **Client Certificates** | TLS Client Auth for sites that require a client cert (e.g. ICP-Brasil/gov.br logins); works in cloud mode via request interception |
 | **Playwright API** | Same API you already know |
 
-## Anti-Detection Status
+## Stealth Feature Status
 
 | Technique | Status | Notes |
 |-----------|--------|-------|
@@ -76,7 +84,7 @@ pip install abrasio[all]
 
 ### Requirements
 
-- Python 3.8+
+- Python 3.10+
 - Chrome browser (installed via `patchright install chrome`)
 
 ## Quick Start
@@ -104,7 +112,7 @@ from abrasio import Abrasio
 
 async def main():
     async with Abrasio(
-        api_key="sk_live_xxx",
+        api_key="abr_live_xxx",
         region="BR",
         url="https://example.com.br",
     ) as browser:
@@ -170,12 +178,12 @@ ok = await solve_cloudflare(page)  # True = page is clear
 ```
 
 Covers Turnstile (managed, interactive, non-interactive, embedded). reCAPTCHA/hCaptcha are not
-solved. Details: [docs/cloudflare.md](docs/cloudflare.md). Approach adapted from
+solved. Details: [docs/cloudflare.md](https://github.com/Scrape-Technology/abrasio-sdk/blob/master/docs/cloudflare.md). Approach adapted from
 [Scrapling](https://github.com/D4Vinci/Scrapling) (BSD-3-Clause).
 
 ## Human-Like Behavior
 
-Utilities for simulating realistic human behavior to bypass behavioral analysis.
+Utilities for simulating realistic human input: mouse movement, typing and scrolling.
 
 ### Mouse Movement (Bezier Curves)
 
@@ -264,7 +272,7 @@ async with StealthClient(rotate_impersonation=True) as client:
 from abrasio import Abrasio, AbrasioConfig, FingerprintConfig
 
 config = AbrasioConfig(
-    # Mode: None = local (free), "sk_xxx" = cloud (paid)
+    # Mode: None = local (free), "abr_live_xxx" = cloud (paid)
     api_key=None,
 
     # Browser
@@ -316,7 +324,7 @@ config = AbrasioConfig(region="JP")
 ```python
 config = AbrasioConfig(region="BR", timezone="America/New_York")
 print(config.region_warnings)
-# ['Timezone mismatch: using America/New_York but region BR expects America/Sao_Paulo']
+# ["Timezone mismatch: using 'America/New_York' but region 'BR' expects one of: America/Sao_Paulo, ..."]
 ```
 
 Without explicit region, locale/timezone are auto-detected from your public IP.
@@ -326,7 +334,7 @@ Without explicit region, locale/timezone are auto-detected from your public IP.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ABRASIO_API_KEY` | API key for cloud mode | `None` |
-| `ABRASIO_API_URL` | API base URL | `https://abrasio.scrapetechnology.com/` |
+| `ABRASIO_API_URL` | API base URL | `https://abrasio-api.scrapetechnology.com` |
 
 ## Client Certificates
 
@@ -372,7 +380,7 @@ the browser. Since the interception always runs in the driver process — never 
 browser itself — this works regardless of where the browser runs:
 
 ```python
-async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="BR") as browser:
     page = await browser.new_page()
     await page.goto("https://sso.acesso.gov.br/login")
 
@@ -416,7 +424,7 @@ With an API key, you get access to the Abrasio cloud infrastructure:
 from abrasio import Abrasio
 
 async with Abrasio(
-    api_key="sk_live_xxx",
+    api_key="abr_live_xxx",
     region="BR",
     url="https://target-site.com.br",
     profile_id="my-profile",
@@ -447,7 +455,7 @@ from abrasio import (
 )
 
 try:
-    async with Abrasio(api_key="sk_live_xxx") as browser:
+    async with Abrasio(api_key="abr_live_xxx") as browser:
         page = await browser.new_page()
         await page.goto("https://example.com")
 except AuthenticationError:
@@ -533,7 +541,7 @@ class StealthClient:
 7. **Set `webrtc=False`** when using a proxy (prevents IP leak)
 8. **Test against bot detection sites** before production deployment
 
-## Testing Anti-Detection
+## Checking Your Fingerprint
 
 ```python
 import asyncio
@@ -589,7 +597,7 @@ abrasio-sdk/
 
 ## References
 
-- [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) - Undetected Playwright fork
+- [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) - Playwright fork with stealth patches
 - [curl_cffi](https://github.com/yifeikong/curl_cffi) - TLS fingerprinting HTTP client
 - [BrowserForge](https://github.com/daijro/browserforge) - Fingerprint generation
 - [Ghost Cursor](https://github.com/Xetera/ghost-cursor) - Bezier curve mouse movements
@@ -606,4 +614,4 @@ For bug reports and feature requests, open a thread in the `#abrasio-feedback` c
 
 ## License
 
-Proprietary - Scrape Technology
+MIT

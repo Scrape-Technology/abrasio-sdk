@@ -26,7 +26,7 @@ class Abrasio:
             await page.goto("https://example.com")
 
         # Cloud mode (paid) - with API key
-        async with Abrasio(api_key="sk_live_xxx") as browser:
+        async with Abrasio(api_key="abr_live_xxx") as browser:
             page = await browser.new_page()
             await page.goto("https://example.com")
 
@@ -59,7 +59,7 @@ class Abrasio:
         """
         # Handle different init patterns
         if isinstance(config, str):
-            # Abrasio("sk_live_xxx") - API key passed as first arg
+            # Abrasio("abr_live_xxx") - API key passed as first arg
             api_key = config
             config = None
 

@@ -59,7 +59,7 @@ class AbrasioAPIClient:
             headers={
                 "X-API-KEY": self.config.api_key,
                 "Content-Type": "application/json",
-                "User-Agent": "abrasio-sdk-python/0.1.0",
+                "User-Agent": "abrasio-sdk-python/0.4.1",
             },
             timeout=httpx.Timeout(30.0),
         )
@@ -155,9 +155,8 @@ class AbrasioAPIClient:
             proxy: Proxy override — string "http://host:port" or dict
                    {"server": "...", "username": "...", "password": "..."}.
                    Overrides the proxy stored in the selected profile's meta.json.
-            hard: Route to the home-server worker pool, reserved for the
-                  hardest anti-bot targets (e.g. Shopee) that the normal
-                  cloud fleet can't pass. Default: False.
+            hard: Route to the dedicated worker pool reserved for the
+                  most demanding targets. Default: False.
 
         Returns:
             Session data including session_id

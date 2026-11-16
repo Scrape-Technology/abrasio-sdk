@@ -1,7 +1,7 @@
 # Cloudflare Turnstile
 
 Abrasio can solve Cloudflare Turnstile and interstitial ("Verify you are human") challenges in
-both local and cloud mode. It does **not** break the captcha: Patchright is undetected, so the
+both local and cloud mode. It does **not** break the captcha: Patchright runs a stealth browser, so the
 widget is clicked the way a user would.
 
 Approach adapted from [Scrapling](https://github.com/D4Vinci/Scrapling)'s `StealthyFetcher`

@@ -1,6 +1,6 @@
 # Human Behavior Simulation
 
-Modern anti-bot systems analyze user interaction patterns to detect automation. This guide explains how to use Abrasio's human behavior utilities to bypass behavioral analysis.
+Modern anti-bot systems analyze user interaction patterns to detect automation. This guide explains how to use Abrasio's human behavior utilities to make automated input look like a real user's.
 
 ## Why Human Behavior Matters
 

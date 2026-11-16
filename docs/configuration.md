@@ -29,12 +29,12 @@ config = AbrasioConfig(
 config = AbrasioConfig(api_key=None)
 
 # Cloud mode
-config = AbrasioConfig(api_key="sk_live_xxx")
+config = AbrasioConfig(api_key="abr_live_xxx")
 
 # Custom API URL
 config = AbrasioConfig(
-    api_key="sk_live_xxx",
-    api_url="https://api.abrasio.io",
+    api_key="abr_live_xxx",
+    api_url="https://abrasio-api.scrapetechnology.com",
 )
 ```
 
@@ -150,7 +150,7 @@ Benefits of persistent profiles:
 ```python
 # Target Brazil with persistent cloud profile
 config = AbrasioConfig(
-    api_key="sk_live_xxx",
+    api_key="abr_live_xxx",
     region="BR",
     url="https://example.com.br",
     profile_id="my-brazil-profile",
@@ -210,8 +210,8 @@ Configuration can also be set via environment variables:
 
 ```bash
 # Set environment variables
-export ABRASIO_API_KEY="sk_live_xxx"
-export ABRASIO_API_URL="https://api.abrasio.io"
+export ABRASIO_API_KEY="abr_live_xxx"
+export ABRASIO_API_URL="https://abrasio-api.scrapetechnology.com"
 ```
 
 ```python
@@ -253,11 +253,11 @@ async with Abrasio(config) as browser:
 
 ```python
 # Shorthand for cloud mode
-async with Abrasio("sk_live_xxx") as browser:
+async with Abrasio("abr_live_xxx") as browser:
     ...
 
 # Equivalent to:
-async with Abrasio(api_key="sk_live_xxx") as browser:
+async with Abrasio(api_key="abr_live_xxx") as browser:
     ...
 ```
 
@@ -282,7 +282,7 @@ config = AbrasioConfig(
 
 ```python
 config = AbrasioConfig(
-    api_key="sk_live_xxx",
+    api_key="abr_live_xxx",
     region="BR",
     url="https://example.com.br",
     profile_id="brazil-scraper",
@@ -335,7 +335,7 @@ print(config_dict)
 ## Checking Mode
 
 ```python
-config = AbrasioConfig(api_key="sk_live_xxx")
+config = AbrasioConfig(api_key="abr_live_xxx")
 
 print(config.is_cloud_mode)  # True
 print(config.is_local_mode)  # False

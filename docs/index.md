@@ -16,9 +16,9 @@ Welcome to the Abrasio SDK documentation.
 
 ## Overview
 
-Abrasio SDK is an undetected web scraping library powered by [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with:
+Abrasio SDK is a stealth browser library for web scraping, powered by [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with:
 
-- **Anti-Detection**: Bypasses Runtime.enable, CDP detection, and navigator.webdriver
+- **Stealth**: no `Runtime.enable` / CDP leaks and no `navigator.webdriver` flag
 - **Cloudflare Turnstile**: `solve_cloudflare=True` solves challenges automatically (local and cloud)
 - **Human Behavior**: Bezier curve mouse movements, natural typing, smooth scrolling
 - **FingerprintConfig**: Control WebGL, WebRTC, canvas/audio noise per session (local mode)
@@ -63,9 +63,9 @@ asyncio.run(main())
 
 ## Features at a Glance
 
-### Anti-Detection (Automatic)
+### Stealth (Automatic)
 
-Patchright handles anti-detection automatically:
+Patchright applies the stealth patches automatically:
 
 - No `Runtime.enable` leak
 - No CDP detection via protocol-level patches
@@ -110,7 +110,7 @@ async with StealthClient(region="BR") as client:
 ### Cloud Mode (Optional)
 
 ```python
-async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="BR") as browser:
     page = await browser.new_page()
     # Browser with real fingerprint and geo-targeting
 ```

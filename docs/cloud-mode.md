@@ -26,7 +26,7 @@ Contact the Abrasio team to get your API key.
 ### 2. Set Environment Variable
 
 ```bash
-export ABRASIO_API_KEY="sk_live_xxx"
+export ABRASIO_API_KEY="abr_live_xxx"
 ```
 
 ### 3. Use Cloud Mode
@@ -36,7 +36,7 @@ import asyncio
 from abrasio import Abrasio
 
 async def main():
-    async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+    async with Abrasio(api_key="abr_live_xxx", region="BR") as browser:
         page = await browser.new_page()
         await page.goto("https://example.com")
         print(await page.title())
@@ -52,7 +52,7 @@ asyncio.run(main())
 from abrasio import Abrasio, AbrasioConfig
 
 config = AbrasioConfig(
-    api_key="sk_live_xxx",
+    api_key="abr_live_xxx",
     region="BR",                  # Target region
     url="https://example.com.br", # Target URL
     profile_id="my-profile",     # Persistent profile
@@ -65,7 +65,7 @@ async with Abrasio(config) as browser:
 ### Environment Variable
 
 ```bash
-export ABRASIO_API_KEY="sk_live_xxx"
+export ABRASIO_API_KEY="abr_live_xxx"
 ```
 
 ```python
@@ -80,7 +80,7 @@ async with Abrasio() as browser:
 Cloud mode supports real-time browser streaming via noVNC:
 
 ```python
-async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="BR") as browser:
     # Check live view URL
     if browser.live_view_url:
         print(f"Watch live: {browser.live_view_url}")
@@ -95,12 +95,12 @@ Target specific regions for location-aware scraping:
 
 ```python
 # Target Brazil
-async with Abrasio(api_key="sk_live_xxx", region="BR") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="BR") as browser:
     page = await browser.new_page()
     await page.goto("https://example.com.br")
 
 # Target United States
-async with Abrasio(api_key="sk_live_xxx", region="US") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="US") as browser:
     page = await browser.new_page()
     await page.goto("https://example.com")
 ```
@@ -128,13 +128,13 @@ Cloud profiles maintain state between sessions:
 
 ```python
 # First session - login
-async with Abrasio(api_key="sk_live_xxx", profile_id="my-account") as browser:
+async with Abrasio(api_key="abr_live_xxx", profile_id="my-account") as browser:
     page = await browser.new_page()
     await page.goto("https://example.com/login")
     # ... perform login ...
 
 # Later session - still logged in!
-async with Abrasio(api_key="sk_live_xxx", profile_id="my-account") as browser:
+async with Abrasio(api_key="abr_live_xxx", profile_id="my-account") as browser:
     page = await browser.new_page()
     await page.goto("https://example.com/dashboard")
     # Cookies preserved from previous session
@@ -158,7 +158,7 @@ Create Session -> Wait for Ready -> Connect via CDP -> Use Browser -> Close
 The SDK handles this automatically:
 
 ```python
-async with Abrasio(api_key="sk_live_xxx") as browser:
+async with Abrasio(api_key="abr_live_xxx") as browser:
     # Session created and connected automatically
     page = await browser.new_page()
     ...
@@ -170,7 +170,7 @@ async with Abrasio(api_key="sk_live_xxx") as browser:
 ```python
 from abrasio import Abrasio
 
-browser = Abrasio(api_key="sk_live_xxx")
+browser = Abrasio(api_key="abr_live_xxx")
 await browser.start()  # Create and connect to session
 
 page = await browser.new_page()
@@ -218,7 +218,7 @@ from abrasio import (
 )
 
 try:
-    async with Abrasio(api_key="sk_live_xxx") as browser:
+    async with Abrasio(api_key="abr_live_xxx") as browser:
         page = await browser.new_page()
         await page.goto("https://example.com")
 except AuthenticationError:
@@ -252,7 +252,7 @@ except AbrasioError as e:
 
 ```python
 # Scraping Brazilian site? Use BR region
-async with Abrasio(api_key="sk_live_xxx", region="BR", url="https://example.com.br") as browser:
+async with Abrasio(api_key="abr_live_xxx", region="BR", url="https://example.com.br") as browser:
     page = await browser.new_page()
     await page.goto("https://example.com.br")
 ```
@@ -266,7 +266,7 @@ from abrasio import Abrasio, AbrasioError
 async def scrape_with_retry(url, max_retries=3):
     for attempt in range(max_retries):
         try:
-            async with Abrasio(api_key="sk_live_xxx") as browser:
+            async with Abrasio(api_key="abr_live_xxx") as browser:
                 page = await browser.new_page()
                 await page.goto(url)
                 return await page.content()
@@ -280,12 +280,12 @@ async def scrape_with_retry(url, max_retries=3):
 
 ```python
 # Use context manager (recommended)
-async with Abrasio(api_key="sk_live_xxx") as browser:
+async with Abrasio(api_key="abr_live_xxx") as browser:
     ...
 # Session automatically closed
 
 # Or manual close
-browser = Abrasio(api_key="sk_live_xxx")
+browser = Abrasio(api_key="abr_live_xxx")
 try:
     await browser.start()
     ...
@@ -311,7 +311,7 @@ finally:
 - Need persistent sessions
 - Need real device fingerprints
 - Don't want to manage proxies
-- Don't want to bypass captchas 
+- Don't want to deal with captchas yourself
 
 ## Combining Local and Cloud
 
@@ -338,5 +338,5 @@ async def scrape(url):
 python scraper.py
 
 # Production
-ABRASIO_API_KEY="sk_live_xxx" python scraper.py
+ABRASIO_API_KEY="abr_live_xxx" python scraper.py
 ```

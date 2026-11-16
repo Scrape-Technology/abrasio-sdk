@@ -4,7 +4,7 @@ This guide will help you get up and running with the Abrasio SDK.
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - pip (Python package manager)
 
 ## Installation
@@ -17,7 +17,7 @@ pip install abrasio
 
 ### 2. Install Chrome Browser
 
-Abrasio uses real Chrome (not Chromium) for better anti-detection:
+Abrasio uses real Chrome (not Chromium) for a more realistic fingerprint:
 
 ```bash
 patchright install chrome
@@ -79,7 +79,7 @@ python hello_abrasio.py
 When you don't provide an API key, Abrasio runs in local mode:
 
 - Browser runs on your machine
-- Uses Patchright for anti-detection
+- Uses Patchright (stealth patches)
 - Free to use
 - IP is your own (use proxies for different IPs)
 - FingerprintConfig available for canvas/audio noise, WebRTC blocking
@@ -103,7 +103,7 @@ With an API key, Abrasio connects to cloud browsers:
 
 ```python
 # Cloud mode - with API key
-async with Abrasio(api_key="sk_live_xxx") as browser:
+async with Abrasio(api_key="abr_live_xxx") as browser:
     ...
 ```
 
@@ -233,7 +233,7 @@ Without explicit region, locale/timezone are auto-detected from your public IP.
 
 ## Testing Your Setup
 
-Run this script to test anti-detection:
+Run this script to check your browser fingerprint:
 
 ```python
 import asyncio
@@ -276,7 +276,7 @@ from abrasio import (
 )
 
 try:
-    async with Abrasio(api_key="sk_live_xxx") as browser:
+    async with Abrasio(api_key="abr_live_xxx") as browser:
         page = await browser.new_page()
         await page.goto("https://example.com")
 except AuthenticationError:

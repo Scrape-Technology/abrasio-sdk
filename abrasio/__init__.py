@@ -19,7 +19,7 @@ Usage:
         await page.goto("https://example.com")
 
     # Paid mode - cloud browser
-    async with Abrasio(api_key="sk_live_xxx") as browser:
+    async with Abrasio(api_key="abr_live_xxx") as browser:
         page = await browser.new_page()
         await page.goto("https://example.com")
 
@@ -52,7 +52,7 @@ from ._exceptions import (
     BlockedError,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = [
     "Abrasio",
     "AbrasioConfig",
