@@ -4,34 +4,31 @@ build-backend = "hatchling.build"
 
 [project]
 name = "abrasio"
-version = "0.4.0"
+version = "0.4.1"
 description = "Stealth web scraping SDK with optional cloud browser support"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 authors = [
     { name = "Scrape Technology", email = "joao.sobhie@scrapetechnology.com" }
 ]
 keywords = [
-    "scraping",
     "web-scraping",
-    "stealth",
-    "patchright",
+    "stealth-browser",
+    "scraping-browser",
     "browser-automation",
-    "anti-detection",
-    "fingerprint",
-    "undetected",
+    "managed-browser",
+    "headless-browser",
+    "playwright",
+    "patchright",
+    "cdp",
     "tls-fingerprint",
-    "ja3",
-    "curl-cffi"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -68,12 +65,18 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Scrape-Technology/abrasio-sdk"
-Documentation = "https://scrapetechnology.com/abrasio"
+Homepage = "https://scrapetechnology.com/abrasio"
+Documentation = "https://scrapetechnology.com/abrasio/docs"
 Repository = "https://github.com/Scrape-Technology/abrasio-sdk"
+Issues = "https://github.com/Scrape-Technology/abrasio-sdk/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["abrasio"]
+
+# Explicit allow-list: a local `python -m build` must never pick up untracked
+# scripts, screenshots or tool state lying in the working tree.
+[tool.hatch.build.targets.sdist]
+include = ["abrasio", "docs", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.black]
 line-length = 100
